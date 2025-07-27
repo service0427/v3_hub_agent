@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  hub:
+    build: .
+    container_name: parserhub-v3-hub
+    ports:
+      - "8445:8445"  # API port
+      - "8446:8446"  # Socket.io port
+    environment:
+      - NODE_ENV=production
+      - PORT=8445
+      - SOCKET_PORT=8446
+      - DB_HOST=${DB_HOST:-mkt.techb.kr}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-techb_pp}
+      - DB_PASS=${DB_PASS:-Tech1324!}
+      - DB_NAME=${DB_NAME:-productparser_db}
+      - LOG_LEVEL=info
+      - TZ=Asia/Seoul
+    volumes:
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - parserhub-v3-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  parserhub-v3-network:
+    driver: bridge
