@@ -138,14 +138,22 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
     const fetchLimit = Math.min(limitNum * 20, 200); // 최대 200개까지 조회
     const result = await pool.query(query, [fetchLimit, minCheckInterval]);
 
-    // 락 획득 시도
-    const keywords = lockManager.acquireMultipleLocks(
-      result.rows.map(row => ({
-        keyword: row.keyword,
-        productCode: row.product_code
-      })),
-      agentId as string
-    ).slice(0, limitNum); // 요청한 개수만큼만
+    // 락 획득 시도 - 필요한 개수만큼만 시도
+    const availableKeywords = result.rows.map(row => ({
+      keyword: row.keyword,
+      productCode: row.product_code
+    }));
+    
+    const keywords: Array<{keyword: string, productCode: string}> = [];
+    
+    // 필요한 개수만큼만 락 획득 시도
+    for (const item of availableKeywords) {
+      if (keywords.length >= limitNum) break;
+      
+      if (lockManager.acquireLock(item.keyword, item.productCode, agentId as string)) {
+        keywords.push(item);
+      }
+    }
 
     logger.info('Keywords assigned to agent', { 
       agentId, 
