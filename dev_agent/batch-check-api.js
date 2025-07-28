@@ -9,7 +9,7 @@ const axios = require('axios');
 const config = {
   hubApiUrl: process.env.HUB_API_URL || 'http://localhost:3331',
   agentId: process.env.AGENT_ID || `agent-${Date.now()}`,
-  maxKeywords: parseInt(process.argv[2] || '100'),
+  maxKeywords: parseInt(process.argv[2] || '2'),
   maxPages: parseInt(process.env.BATCH_MAX_PAGES || '5'),
   batchSize: parseInt(process.env.BATCH_SIZE || '10'),
   delayBetweenBatches: parseInt(process.env.BATCH_DELAY || '5000'),
