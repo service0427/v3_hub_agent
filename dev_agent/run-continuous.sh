@@ -7,16 +7,18 @@ echo "=== V3 Batch Check Continuous Mode ==="
 echo ""
 
 # 고정값 설정
-KEYWORDS_PER_BATCH=2
-BASE_INTERVAL=60        # 기본 60초
-MAX_INTERVAL=600        # 최대 10분 (600초)
-current_interval=$BASE_INTERVAL
+KEYWORDS_PER_BATCH=1
+SUCCESS_INTERVAL=5      # 성공 시 5초 대기
+BASE_INTERVAL=60        # 키워드 없을 때 기본 60초
+MAX_INTERVAL=605        # 최대 605초
+current_interval=$SUCCESS_INTERVAL
 no_keyword_count=0
 
 echo "Configuration:"
 echo "- Keywords per batch: $KEYWORDS_PER_BATCH"
-echo "- Base interval: ${BASE_INTERVAL}s"
-echo "- Max interval: ${MAX_INTERVAL}s (10 minutes)"
+echo "- Success interval: ${SUCCESS_INTERVAL}s"
+echo "- No keyword base interval: ${BASE_INTERVAL}s"
+echo "- Max interval: ${MAX_INTERVAL}s"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
@@ -47,7 +49,6 @@ while true; do
     
     echo "========================================="
     echo "Run #$run_count - $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "Current interval: ${current_interval}s"
     echo "========================================="
     
     # 배치 실행 및 출력 캡처
@@ -66,8 +67,11 @@ while true; do
     if echo "$output" | grep -q "No keywords to check"; then
         no_keyword_count=$((no_keyword_count + 1))
         
-        # 대기시간 증가 (최대 10분까지)
-        if [ $current_interval -lt $MAX_INTERVAL ]; then
+        # 첫 번째 "No keywords"일 때 BASE_INTERVAL로 설정
+        if [ $no_keyword_count -eq 1 ]; then
+            current_interval=$BASE_INTERVAL
+        else
+            # 이후부터 60초씩 증가 (최대 605초까지)
             current_interval=$((current_interval + 60))
             if [ $current_interval -gt $MAX_INTERVAL ]; then
                 current_interval=$MAX_INTERVAL
@@ -76,15 +80,15 @@ while true; do
         
         echo ""
         echo "📊 No keywords found (${no_keyword_count} times)"
-        echo "⏱️  Interval increased to ${current_interval}s"
+        echo "⏱️  Next check in ${current_interval}s"
     else
-        # 키워드가 있으면 리셋
-        if [ $no_keyword_count -gt 0 ] || [ $current_interval -ne $BASE_INTERVAL ]; then
+        # 키워드가 있으면 5초로 설정
+        if [ $no_keyword_count -gt 0 ] || [ $current_interval -ne $SUCCESS_INTERVAL ]; then
             echo ""
-            echo "✅ Keywords found! Resetting interval to ${BASE_INTERVAL}s"
-            current_interval=$BASE_INTERVAL
-            no_keyword_count=0
+            echo "✅ Keyword processed! Next check in ${SUCCESS_INTERVAL}s"
         fi
+        current_interval=$SUCCESS_INTERVAL
+        no_keyword_count=0
     fi
     
     # 다음 실행까지 카운트다운
