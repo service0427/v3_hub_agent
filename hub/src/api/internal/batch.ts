@@ -35,6 +35,13 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
   const minCheckInterval = parseInt(process.env.MIN_CHECK_INTERVAL || '600'); // 기본 10분
   const syncTimeLimit = parseInt(process.env.SYNC_TIME_LIMIT || '60'); // 기본 60분
 
+  logger.info('Keyword search parameters', {
+    limitNum,
+    minCheckInterval,
+    syncTimeLimit,
+    agentId
+  });
+
   try {
     // 현재 락에 걸린 키워드 목록 가져오기
     const lockedKeywords = lockManager.getLockedKeywords();
@@ -59,7 +66,47 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
           COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
           COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
           COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
-        ) as last_check_time
+        ) as last_check_time,
+        CURRENT_TIME as current_time,
+        CASE
+          WHEN CURRENT_TIME >= GREATEST(
+            COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+          ) THEN
+            EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+              COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+            )))
+          ELSE -- 자정을 넘어간 경우
+            86400 + EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+              COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+            )))
+        END as seconds_since_last_check
       FROM v3_keyword_list kl
       LEFT JOIN v3_keyword_ranking_checks krc 
         ON kl.keyword = krc.keyword 
@@ -136,7 +183,64 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
 
     // 락 실패를 고려하여 더 많은 키워드 조회
     const fetchLimit = Math.min(limitNum * 20, 200); // 최대 200개까지 조회
+    
+    logger.info('Executing keyword query', {
+      fetchLimit,
+      minCheckInterval,
+      query: query.substring(0, 200) + '...'
+    });
+    
     const result = await pool.query(query, [fetchLimit, minCheckInterval]);
+    
+    // 디버그용: 모든 키워드 확인 (조건 무시)
+    const debugQuery = `
+      SELECT 
+        kl.keyword, 
+        kl.product_code,
+        krc.check_time_1,
+        krc.check_time_2,
+        krc.check_time_3,
+        CURRENT_TIME as current_time,
+        CASE
+          WHEN krc.check_time_1 IS NOT NULL THEN
+            EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.check_time_1::TIME))
+          ELSE NULL
+        END as seconds_since_check_1
+      FROM v3_keyword_list kl
+      LEFT JOIN v3_keyword_ranking_checks krc 
+        ON kl.keyword = krc.keyword 
+        AND kl.product_code = krc.product_code 
+        AND krc.check_date = CURRENT_DATE
+      WHERE kl.is_active = TRUE 
+        AND kl.last_sync_at > NOW() - INTERVAL '${syncTimeLimit} minutes'
+      ORDER BY krc.updated_at DESC NULLS LAST
+      LIMIT 3
+    `;
+    
+    const debugResult = await pool.query(debugQuery);
+
+    logger.info('Debug query result (all keywords)', {
+      debugRowCount: debugResult.rows.length,
+      debugRows: debugResult.rows.map(row => ({
+        keyword: row.keyword,
+        productCode: row.product_code,
+        checkTime1: row.check_time_1,
+        currentTime: row.current_time,
+        secondsSinceCheck1: row.seconds_since_check_1
+      }))
+    });
+
+    logger.info('Query result', {
+      rowCount: result.rows.length,
+      firstFewRows: result.rows.slice(0, 3).map(row => ({
+        keyword: row.keyword,
+        productCode: row.product_code,
+        lastCheckTime: row.last_check_time,
+        currentTime: row.current_time,
+        secondsSinceLastCheck: row.seconds_since_last_check,
+        hasCheckId: !!row.check_id
+      }))
+    });
 
     // 락 획득 시도 - 필요한 개수만큼만 시도
     const availableKeywords = result.rows.map(row => ({
