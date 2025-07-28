@@ -113,7 +113,7 @@ async function searchKeyword(page, keyword, product_code) {
     
     await page.goto(searchUrl, { 
       waitUntil: 'domcontentloaded',
-      timeout: 20000  // 전체 사이클 30초 제한을 위해 20초로 조정
+      timeout: 40000  // 첫 페이지는 40초 타임아웃 (브라우저 초기화 고려)
     });
     
     await page.waitForTimeout(2000); // 페이지 안정화 대기
@@ -247,7 +247,10 @@ async function processBatch(browser, keywords, stats) {
       const context = await browser.newContext({
         viewport: { width: 1200, height: 800 },
         locale: 'ko-KR',
-        timezoneId: 'Asia/Seoul'
+        timezoneId: 'Asia/Seoul',
+        // 브라우저 컨텍스트 타임아웃도 증가
+        navigationTimeout: 45000,
+        actionTimeout: 30000
       });
       
       const page = await context.newPage();
@@ -313,12 +316,13 @@ async function main() {
       return;
     }
     
-    // Launch browser
+    // Launch browser (초기 실행 시간 고려)
     browser = await chromium.launch({
       headless: config.headless,
       args: [
         '--disable-blink-features=AutomationControlled'
-      ]
+      ],
+      timeout: 60000 // 브라우저 초기 실행 60초 타임아웃
     });
     
     // Process in batches
