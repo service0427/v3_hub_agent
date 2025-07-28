@@ -1,40 +1,27 @@
 {
   "name": "parserhub-v3-agent",
   "version": "3.0.0",
-  "description": "ParserHub V3 Windows VM Agent - Multi-browser Coupang crawler",
+  "description": "ParserHub V3 Crawler Agent with multi-browser support",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "test": "echo \"No tests specified\"",
+    "dev": "LOG_LEVEL=debug node src/index.js",
     "chrome": "BROWSER_TYPE=chrome node src/index.js",
     "firefox": "BROWSER_TYPE=firefox node src/index.js",
-    "edge": "BROWSER_TYPE=edge node src/index.js"
+    "firefox-nightly": "BROWSER_TYPE=firefox-nightly node src/index.js",
+    "install-browsers": "npx playwright install chromium firefox"
   },
-  "keywords": [
-    "coupang",
-    "crawler",
-    "agent",
-    "multi-browser",
-    "windows",
-    "playwright"
-  ],
-  "author": "techb",
-  "license": "MIT",
   "dependencies": {
-    "playwright": "^1.53.2",
-    "socket.io-client": "^4.7.2",
-    "winston": "^3.11.0",
     "dotenv": "^16.4.5",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "nodemon": "^2.0.22"
+    "playwright": "^1.53.2",
+    "playwright-extra": "^4.3.6",
+    "playwright-extra-plugin-stealth": "^0.0.1",
+    "socket.io-client": "^4.7.2",
+    "winston": "^3.11.0"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "os": [
-    "win32"
-  ]
+  "author": "ParserHub V3",
+  "license": "MIT"
 }

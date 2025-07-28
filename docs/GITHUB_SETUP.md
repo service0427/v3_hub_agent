@@ -108,7 +108,7 @@ git tag -l
 - 과금 시스템 (keyword+code 일일 30원)
 - Socket.io 에이전트 관리 시스템
 - PM2 배포 스크립트
-- 원격 서버 배포 (http://u24.techb.kr:8545)
+- 원격 서버 배포 (https://u24.techb.kr)
 
 ### ⏳ 진행 예정
 - Windows VM 에이전트 개발

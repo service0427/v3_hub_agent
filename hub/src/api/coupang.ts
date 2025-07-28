@@ -7,6 +7,7 @@ import { ApiError, CoupangSearchResponse } from '../types';
 import { BillingService } from '../services/billing';
 import { RankingHistoryModel } from '../db/models';
 import { AgentManager } from '../agent/manager';
+import { RollingManager } from '../agent/rolling';
 import { getAvailableBrowsers, isBrowserAvailable } from '../config/browser';
 import { createLogger } from '../utils/logger';
 import { io } from '../index';
@@ -31,10 +32,10 @@ router.get('/', asyncHandler(async (req: AuthRequest, res: any) => {
     throw new ApiError('VALIDATION_ERROR', error, 400);
   }
 
-  const { keyword, code, pages, browser } = value!;
+  const { keyword, code, pages, browser, host } = value!;
   const apiKey = req.apiKey!;
 
-  logger.info('Coupang search request', { apiKey, keyword, code, pages, browser });
+  logger.info('Coupang search request', { apiKey, keyword, code, pages, browser, host });
 
   // Check browser availability
   if (browser !== 'auto') {
@@ -64,9 +65,10 @@ router.get('/', asyncHandler(async (req: AuthRequest, res: any) => {
       browser: browser || 'auto',
     });
 
-    // Select agent
-    const agent = AgentManager.selectAgent(
-      browser === 'auto' ? undefined : browser as any
+    // Select agent using rolling strategy or specific host
+    const agent = RollingManager.getNextAgent(
+      browser === 'auto' ? undefined : browser as any,
+      host  // host 파라미터 전달
     );
 
     if (!agent) {
@@ -83,9 +85,12 @@ router.get('/', asyncHandler(async (req: AuthRequest, res: any) => {
     // Send task to agent via Socket.IO
     io.to(agent.id).emit('task', {
       taskId: task.id,
-      keyword: task.keyword,
-      productCode: task.productCode,
-      pages: task.pages,
+      type: 'coupang-search',
+      params: {
+        keyword: task.keyword,
+        targetCode: task.productCode,
+        pages: task.pages,
+      },
     });
 
     // Wait for result (with timeout)

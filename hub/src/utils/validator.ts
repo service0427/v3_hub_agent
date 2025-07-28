@@ -22,10 +22,16 @@ export const coupangSearchSchema = Joi.object<CoupangSearchRequest>({
     .messages({
       'string.empty': 'API 키는 필수입니다',
     }),
-  browser: Joi.string().valid('chrome', 'firefox', 'edge', 'auto').default('auto')
+  browser: Joi.string().valid('chrome', 'firefox', 'firefox-nightly', 'edge', 'auto').default('auto')
     .messages({
-      'any.only': '브라우저는 chrome, firefox, edge, auto 중 하나여야 합니다',
+      'any.only': '브라우저는 chrome, firefox, firefox-nightly, edge, auto 중 하나여야 합니다',
     }),
+  host: Joi.string()
+    .pattern(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}$/)
+    .optional()
+    .messages({
+      'string.pattern.base': 'host는 ip:port 형식이어야 합니다 (예: 192.168.1.100:3301)'
+    })
 });
 
 // 검증 함수

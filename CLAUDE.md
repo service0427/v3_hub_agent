@@ -11,11 +11,12 @@ ParserHub V3는 **쿠팡 전용 실시간 제품 순위 조회 서비스**입니
 ### 핵심 특징
 - **쿠팡 전용**: 네이버 등 타 플랫폼 지원 안함
 - **멀티 브라우저 지원**: 
-  - Linux: Chrome, Firefox만 지원 (Edge 미지원)
-  - Windows: Chrome, Firefox, Edge 모두 지원
+  - Linux: Chrome, Firefox, Firefox Nightly 지원
+  - Windows: Chrome, Firefox, Edge 지원
 - **실시간 조회**: 캐시 없이 에이전트 직접 크롤링
 - **과금 시스템**: keyword+code 조합별 일일 30원 과금
 - **V2 격리**: 기존 V2 시스템과 완전히 분리된 환경에서 동작
+- **단순 롤링**: 쿨다운 없이 모든 에이전트 순차 사용
 
 ## 🏗️ 시스템 아키텍처
 
@@ -94,7 +95,7 @@ v3_hub_agent/
 
 ### 쿠팡 전용 Public API
 ```
-GET /api/v3/coupang?keyword={keyword}&code={code}&pages={pages}&key={key}&browser={browser}
+GET https://u24.techb.kr/v3/api/coupang?keyword={keyword}&code={code}&pages={pages}&key={key}&browser={browser}
 ```
 
 ### 파라미터
@@ -141,6 +142,13 @@ CREATE TABLE v3_coupang_billing_usage (
 - 각 API 키별 unique_queries 카운트
 - 총 과금액 = unique_queries × 30원
 ```
+
+## 🚨 에이전트 실행 정책
+- **절대 headless 모드로 작동하지 않음**
+- **실제 브라우저를 GUI로 띄워놓고 통신하는 방식만 사용**
+- **에이전트는 GUI 환경에서만 실행 가능**
+- **HEADLESS=false 설정 필수**
+- **원격 서버에서는 사용자가 직접 GUI 모드로 실행**
 
 ## 🔧 개발 환경 설정
 

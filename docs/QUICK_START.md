@@ -35,36 +35,47 @@ pm2 start dist/index.js --name parserhub-v3
 npm run dev
 ```
 
-### 3단계: 에이전트 설정 (Windows VM)
+### 3단계: 에이전트 설정 (Linux/Windows)
 
-```cmd
-cd agent\
+```bash
+cd agent/
 
 # 의존성 설치
 npm install
 
 # 브라우저 설치
-npx playwright install chromium firefox msedge
+npx playwright install chromium firefox
+
+# Firefox Nightly 설치 (선택)
+wget -O firefox-nightly.tar.bz2 "https://download.mozilla.org/?product=firefox-nightly-latest&os=linux64"
+tar -xjf firefox-nightly.tar.bz2
+sudo mv firefox /usr/bin/firefox-nightly
 
 # 환경변수 설정
-copy .env.example .env
-# .env 파일에서 HUB_URL을 http://u24.techb.kr:8545로 설정
+cp .env.example .env
+# .env 파일 편집
+# - HUB_URL=https://u24.techb.kr
+# - HEADLESS=false (GUI 모드 필수)
+# - AGENT_ID=LINUX-3301
+# - BROWSER_TYPE=chrome
 
-# 에이전트 실행 (개발 예정)
-npm start
+# 에이전트 실행
+./manage.sh  # 관리 도구 사용 (권장)
+# 또는
+npm start    # 직접 실행
 ```
 
 ### 4단계: API 테스트
 
 ```bash
 # 헬스 체크
-curl http://u24.techb.kr:8545/health
+curl https://u24.techb.kr/v3/health
 
 # 에이전트 상태 확인
-curl http://u24.techb.kr:8545/api/v3/agents/status
+curl https://u24.techb.kr/v3/api/agents/status
 
 # 쿠팡 순위 조회 테스트 (에이전트 필요)
-curl "http://u24.techb.kr:8545/api/v3/coupang?keyword=노트북&code=83887459648&key=test-api-key-123"
+curl "https://u24.techb.kr/v3/api/coupang?keyword=노트북&code=83887459648&key=test-api-key-123"
 ```
 
 ## 🔧 개발 환경 설정
@@ -82,10 +93,17 @@ npm run lint        # 린트 검사
 ### 에이전트 개발
 ```bash
 cd agent/
-npm run dev         # 개발 모드
-npm run chrome      # 크롬 전용 실행
-npm run firefox     # 파이어폭스 전용 실행
-npm run edge        # 엣지 전용 실행
+npm start           # 기본 실행 (.env 설정에 따름)
+./manage.sh         # 관리 도구 (시작/중지/재시작)
+
+# manage.sh 메뉴:
+# 1) 상태 보기
+# 2) 단일 에이전트 시작 (3301/3302/3303 선택)
+# 3) 모든 에이전트 시작
+# 4) 단일 에이전트 정지
+# 5) 모든 에이전트 정지
+# 6) 모든 에이전트 재시작
+# 7) 로그 보기
 ```
 
 ## 🚀 PM2로 서버 관리
@@ -119,10 +137,10 @@ tail -f agent/logs/agent.log
 ### 시스템 상태 확인
 ```bash
 # 에이전트 상태
-curl http://u24.techb.kr:8545/api/v3/agents/status
+curl https://u24.techb.kr/v3/api/agents/status
 
 # 브라우저별 통계 확인
-curl http://u24.techb.kr:8545/api/v3/coupang/stats?hours=24
+curl https://u24.techb.kr/v3/api/coupang/stats?hours=24
 ```
 
 ## 🔍 문제 해결
@@ -145,8 +163,8 @@ curl http://u24.techb.kr:8545/api/v3/coupang/stats?hours=24
    ```
 
 3. **에이전트 연결 안됨**
-   - 에이전트가 아직 개발되지 않음
-   - Windows VM에서 에이전트 개발 필요
+   - GUI 환경에서 HEADLESS=false로 실행 필요
+   - manage.sh 사용하여 에이전트 상태 확인
    - Socket.io는 HTTP와 같은 포트(8545) 사용
 
 ### 디버그 모드
@@ -175,9 +193,10 @@ LOG_LEVEL=debug npm start
 
 ### 브라우저별 권장사항
 
-- **Chrome**: 가장 안정적, 기본 선택
-- **Firefox**: 차단 회피에 효과적
-- **Edge**: Windows 환경 최적화
+- **Chrome**: 가장 안정적, 기본 선택 (포트 3301)
+- **Firefox**: 차단 회피에 효과적 (포트 3302)
+- **Firefox Nightly**: 최신 기능 테스트 (포트 3303)
+- **Edge**: Windows 환경 최적화 (Windows에서만)
 
 ## 🔐 보안 설정
 
@@ -194,8 +213,7 @@ UPDATE v3_api_keys SET is_active = false WHERE api_key = 'old-key';
 ### 방화벽 설정
 ```bash
 # Ubuntu UFW 예시
-sudo ufw allow 8445/tcp
-sudo ufw allow 8446/tcp
+sudo ufw allow 8545/tcp  # Hub 서버 포트
 sudo ufw enable
 ```
 

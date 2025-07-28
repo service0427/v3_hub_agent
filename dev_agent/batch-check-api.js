@@ -113,10 +113,10 @@ async function searchKeyword(page, keyword, product_code) {
     
     await page.goto(searchUrl, { 
       waitUntil: 'domcontentloaded',
-      timeout: 30000 
+      timeout: 20000  // 전체 사이클 30초 제한을 위해 20초로 조정
     });
     
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000); // 페이지 안정화 대기
     
     // Check for error page
     const quickCheck = await page.evaluate(() => {
@@ -154,7 +154,7 @@ async function searchKeyword(page, keyword, product_code) {
     // Wait for product list if needed
     if (!quickCheck.hasProductList || quickCheck.productCount === 0) {
       try {
-        await page.waitForSelector('#product-list > li[data-id]', { timeout: 5000 });
+        await page.waitForSelector('#product-list > li[data-id]', { timeout: 8000 }); // 전체 30초 제한 내 동작
       } catch (error) {
         logger.warn(`Product list not found for: ${keyword}`);
         return null;
@@ -168,7 +168,7 @@ async function searchKeyword(page, keyword, product_code) {
     while (currentPage <= config.maxPages && !foundRank) {
       if (currentPage > 1) {
         const nextUrl = `https://www.coupang.com/np/search?q=${encodeURIComponent(keyword)}&channel=user&failRedirectApp=true&page=${currentPage}&listSize=72`;
-        await page.goto(nextUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(nextUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }); // 다음 페이지는 더 빠르게
         await page.waitForTimeout(1000);
       }
       

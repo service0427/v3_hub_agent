@@ -9,7 +9,7 @@ ParserHub V3는 쿠팡 전용으로 특화된 실시간 제품 순위 조회 서
 ## ✨ 주요 특징
 
 - **🎯 쿠팡 전용**: 네이버 등 타 플랫폼 제거로 성능 최적화
-- **🖥️ 윈도우 VM 기반**: 크롬/파이어폭스/엣지 멀티 브라우저 지원
+- **🖥️ 멀티 브라우저 지원**: 크롬/파이어폭스/파이어폭스Nightly/엣지 지원
 - **⚡ 실시간 조회**: 캐시 없이 에이전트 직접 크롤링
 - **💰 과금 시스템**: keyword+code 조합별 일일 30원 과금
 - **🛡️ 차단 회피**: 브라우저별 분산으로 차단 리스크 최소화
@@ -50,30 +50,39 @@ pm2 start dist/index.js --name parserhub-v3
 npm run dev
 ```
 
-### 2. 에이전트 설정 (Windows VM)
+### 2. 에이전트 설정 (Linux)
 
-```cmd
+```bash
 cd agent/
 npm install
-# 브라우저 설치 (Chrome, Firefox, Edge)
-node src/index.js
+
+# 브라우저 설치 (Playwright)
+npx playwright install chromium firefox
+
+# Firefox Nightly 설치
+wget -O firefox-nightly.tar.bz2 "https://download.mozilla.org/?product=firefox-nightly-latest&os=linux64"
+tar -xjf firefox-nightly.tar.bz2
+sudo mv firefox /usr/bin/firefox-nightly
+
+# GUI 모드 필수 - manage.sh 사용
+./manage.sh
 ```
 
 ### 3. API 테스트
 
 ```bash
 # 헬스 체크
-curl "http://u24.techb.kr:8545/health"
+curl "https://u24.techb.kr/v3/health"
 
 # 쿠팡 API (에이전트 연결 필요)
-curl "http://u24.techb.kr:8545/api/v3/coupang?keyword=노트북&code=83887459648&key=test-api-key-123"
+curl "https://u24.techb.kr/v3/api/coupang?keyword=노트북&code=83887459648&key=test-api-key-123"
 ```
 
 ## 📋 API 사용법
 
 ### 기본 요청
 ```
-GET /api/v3/coupang?keyword={keyword}&code={code}&key={key}
+GET https://u24.techb.kr/v3/api/coupang?keyword={keyword}&code={code}&key={key}
 ```
 
 ### 파라미터
@@ -81,7 +90,7 @@ GET /api/v3/coupang?keyword={keyword}&code={code}&key={key}
 - `code` (필수): 제품 코드
 - `key` (필수): API 키
 - `pages` (선택): 검색 페이지 수 (기본값: 1)
-- `browser` (선택): 브라우저 지정 (chrome/firefox/edge/auto)
+- `browser` (선택): 브라우저 지정 (chrome/firefox/firefox-nightly/edge/auto)
 
 ### 응답 예시
 ```json
@@ -157,10 +166,10 @@ DB_NAME=productparser_db
 ### 상태 확인
 ```bash
 # 허브 상태
-curl http://u24.techb.kr:8545/health
+curl https://u24.techb.kr/v3/health
 
 # 에이전트 상태
-curl http://u24.techb.kr:8545/api/v3/agents/status
+curl https://u24.techb.kr/v3/api/agents/status
 ```
 
 ### 로그 확인
@@ -226,8 +235,8 @@ npm run build
 ### 일반적인 문제
 
 1. **에이전트 연결 안됨**
-   - 에이전트가 아직 개발되지 않음
-   - Windows VM에서 에이전트 개발 필요
+   - GUI 환경에서 HEADLESS=false로 실행 필요
+   - manage.sh를 사용하여 에이전트 실행
 
 2. **포트 접속 불가**
    - 방화벽 설정 확인 필요
@@ -250,6 +259,9 @@ npm run build
 - ✅ 과금 시스템 (일일 중복 제거)
 - ✅ Socket.io 에이전트 통신
 - ✅ PM2 배포 스크립트
+- ✅ Linux 에이전트 (Chrome/Firefox/Firefox Nightly)
+- ✅ 하트비트 모니터링 시스템
+- ✅ 단순 롤링 전략
 
 ### 진행 예정
 - ⏳ Windows VM 에이전트 개발

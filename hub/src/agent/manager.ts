@@ -65,7 +65,7 @@ export class AgentManager {
       agent => agent.status === 'idle'
     );
 
-    if (browser && browser !== 'chrome' && browser !== 'firefox' && browser !== 'edge') {
+    if (browser) {
       return availableAgents.filter(agent => agent.browser === browser);
     }
 
@@ -83,7 +83,7 @@ export class AgentManager {
     }
 
     // If specific browser requested
-    if (preferredBrowser && preferredBrowser !== 'chrome' && preferredBrowser !== 'firefox' && preferredBrowser !== 'edge') {
+    if (preferredBrowser) {
       availableAgents = availableAgents.filter(
         agent => agent.browser === preferredBrowser
       );
@@ -180,12 +180,39 @@ export class AgentManager {
   }
 
   /**
+   * Get specific agent
+   */
+  static getAgent(agentId: string): Agent | undefined {
+    return this.agents.get(agentId);
+  }
+
+  /**
+   * Get agent by host (ip:port)
+   */
+  static getAgentByHost(host: string): Agent | null {
+    const [ip, portStr] = host.split(':');
+    const port = parseInt(portStr);
+    
+    return Array.from(this.agents.values()).find(agent => 
+      agent.remoteAddress === ip && agent.port === port
+    ) || null;
+  }
+
+  /**
+   * Get all agents
+   */
+  static getAllAgents(): Agent[] {
+    return Array.from(this.agents.values());
+  }
+
+  /**
    * Get agent statistics
    */
   static getStats() {
     const browserStats: Record<BrowserType, number> = {
       chrome: 0,
       firefox: 0,
+      'firefox-nightly': 0,
       edge: 0,
     };
 

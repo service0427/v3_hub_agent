@@ -1,7 +1,7 @@
 // Common type definitions for ParserHub V3
 
 // Browser types
-export type BrowserType = 'chrome' | 'firefox' | 'edge';
+export type BrowserType = 'chrome' | 'firefox' | 'firefox-nightly' | 'edge';
 
 // API Request types
 export interface CoupangSearchRequest {
@@ -10,6 +10,7 @@ export interface CoupangSearchRequest {
   pages?: number;
   key: string;
   browser?: BrowserType | 'auto';
+  host?: string;  // 형식: "ip:port" (예: "192.168.1.100:3301")
 }
 
 // API Response types
@@ -53,6 +54,8 @@ export interface Agent {
   connectedAt: Date;
   tasksCompleted: number;
   tasksInProgress: number;
+  remoteAddress?: string;  // 에이전트 접속 IP
+  port?: number;           // 에이전트 포트
 }
 
 // Task types

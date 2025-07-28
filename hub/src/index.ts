@@ -58,8 +58,11 @@ app.get('/health', (_req, res) => {
 // API routes
 import coupangRouter from './api/coupang';
 import agentsRouter from './api/agents';
+import batchRouter from './api/internal/batch';
+
 app.use('/api/v3/coupang', coupangRouter);
 app.use('/api/v3/agents', agentsRouter);
+app.use('/api/v3/internal/batch', batchRouter);
 
 // Error handling
 app.use(notFoundHandler);
@@ -67,19 +70,36 @@ app.use(errorHandler);
 
 // Socket.IO connection handling for agents
 import { AgentManager } from './agent/manager';
+import { HeartbeatManager } from './agent/heartbeat';
+import { RollingManager } from './agent/rolling';
 
 io.on('connection', (socket) => {
   logger.info('New agent connected', { socketId: socket.id });
 
   socket.on('register', (agentInfo) => {
+    // Extract remote IP address
+    const remoteAddress = socket.handshake.address.replace('::ffff:', '');
+    
+    // Enhance agent info with connection details
+    const enhancedAgentInfo = {
+      ...agentInfo,
+      remoteAddress,
+      port: agentInfo.instanceId || agentInfo.port || 3301
+    };
+    
     logger.info('Agent registration request', { 
       socketId: socket.id, 
-      agentInfo 
+      agentInfo: enhancedAgentInfo 
     });
     
     // Register agent
-    const agent = AgentManager.registerAgent(socket, agentInfo);
+    const agent = AgentManager.registerAgent(socket, enhancedAgentInfo);
+    HeartbeatManager.registerHeartbeat(agent.id);
     socket.emit('registered', { agentId: agent.id });
+  });
+
+  socket.on('heartbeat', () => {
+    HeartbeatManager.updateHeartbeat(socket.id);
   });
 
   socket.on('task-complete', (data) => {
@@ -89,12 +109,18 @@ io.on('connection', (socket) => {
       success: data.success 
     });
     
+    // If task failed due to blocking, record for statistics
+    if (!data.success && data.blocked) {
+      RollingManager.recordBlockingEvent(socket.id, data.blockType || 'UNKNOWN');
+    }
+    
     // Broadcast task completion
     io.emit('task-complete', data);
   });
 
   socket.on('disconnect', () => {
     logger.info('Agent disconnected', { socketId: socket.id });
+    HeartbeatManager.removeHeartbeat(socket.id);
     AgentManager.removeAgent(socket.id);
   });
 
@@ -117,12 +143,17 @@ const startServers = async () => {
       if (!tablesVerified) {
         logger.warn('V3 tables not found in database - API will have limited functionality');
         // throw new Error('V3 tables not found in database');
+      } else {
+        logger.info('V3 tables verified successfully');
       }
     }
 
     // Log browser configuration
     logBrowserConfiguration();
 
+    // Start heartbeat monitoring
+    HeartbeatManager.start();
+    
     // Start HTTP server
     httpServer.listen(config.server.port, '0.0.0.0', () => {
       logger.info(`HTTP server listening on port ${config.server.port}`);
