@@ -4,18 +4,47 @@ const winston = require('winston');
 const path = require('path');
 const fs = require('fs').promises;
 const axios = require('axios');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
+
+// Get IP Address using ip a command
+async function getAgentIP() {
+  try {
+    // ip a 명령어로 IP 가져오기
+    const { stdout } = await execAsync('ip a | grep "inet " | grep -v "127.0.0.1" | head -1 | awk \'{print $2}\' | cut -d/ -f1');
+    const localIP = stdout.trim();
+    
+    if (localIP) {
+      return localIP;
+    }
+  } catch (error) {
+    logger.warn('Failed to get IP from ip a command:', error.message);
+  }
+  
+  try {
+    // 실패시 외부 API 사용
+    const response = await axios.get('https://api.ipify.org?format=json', { timeout: 5000 });
+    return response.data.ip;
+  } catch (error) {
+    logger.error('Failed to get IP address:', error.message);
+    return 'unknown';
+  }
+}
 
 // Configuration
 const config = {
   hubApiUrl: process.env.HUB_API_URL || 'http://localhost:3331',
   agentId: process.env.AGENT_ID || `agent-${Date.now()}`,
+  browser: process.env.BROWSER || 'chrome', // chrome, firefox, edge
   maxKeywords: parseInt(process.argv[2] || '2'),
   maxPages: parseInt(process.env.BATCH_MAX_PAGES || '5'),
   batchSize: parseInt(process.env.BATCH_SIZE || '10'),
   delayBetweenBatches: parseInt(process.env.BATCH_DELAY || '5000'),
   headless: false, // 항상 GUI 모드
   logLevel: process.env.LOG_LEVEL || 'info',
-  apiTimeout: 20000 // 20초
+  apiTimeout: 20000, // 20초
+  agentIP: null // 시작시 설정
 };
 
 // Logger setup
@@ -79,7 +108,9 @@ async function saveRankingResult(keyword, product_code, rank, productInfo = null
       keyword,
       productCode: product_code,
       rank,
-      agentId: config.agentId
+      agentId: config.agentId,
+      agentIP: config.agentIP,
+      browser: config.browser
     };
     
     // 상품 정보가 있으면 추가
@@ -106,7 +137,9 @@ async function logFailure(keyword, product_code, errorMessage) {
       keyword,
       productCode: product_code,
       error: errorMessage,
-      agentId: config.agentId
+      agentId: config.agentId,
+      agentIP: config.agentIP,
+      browser: config.browser
     });
     
     logger.info('Failure logged via API');
@@ -348,9 +381,14 @@ async function processBatch(browser, keywords, stats) {
 
 // Main function
 async function main() {
+  // IP 주소 가져오기
+  config.agentIP = await getAgentIP();
+  
   logger.info('=== V3 Keyword Ranking Batch Check (API Mode) ===');
   logger.info(`Hub API URL: ${config.hubApiUrl}`);
   logger.info(`Agent ID: ${config.agentId}`);
+  logger.info(`Agent IP: ${config.agentIP}`);
+  logger.info(`Browser: ${config.browser}`);
   logger.info(`Max keywords: ${config.maxKeywords}`);
   logger.info(`Batch size: ${config.batchSize}`);
   

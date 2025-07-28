@@ -182,7 +182,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
  * 순위 결과 저장
  */
 router.post('/result', asyncHandler(async (req: Request, res: Response) => {
-  const { keyword, productCode, rank, agentId, productName, thumbnailUrl, rating, reviewCount } = req.body;
+  const { keyword, productCode, rank, agentId, agentIP, browser, productName, thumbnailUrl, rating, reviewCount } = req.body;
 
   if (!keyword || !productCode || rank === undefined || !agentId) {
     throw new ApiError('VALIDATION_ERROR', 'Missing required fields', 400);
@@ -311,6 +311,19 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
       agentId 
     });
 
+    logger.info('Ranking result saved', {
+      keyword,
+      productCode,
+      rank,
+      checkNumber,
+      agentId,
+      agentIP,
+      browser,
+      productName,
+      rating,
+      reviewCount
+    });
+
     res.json({
       success: true,
       checkNumber,
@@ -328,7 +341,7 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
  * 실패 로깅
  */
 router.post('/failure', asyncHandler(async (req: Request, res: Response) => {
-  const { keyword, productCode, error: errorMessage, agentId } = req.body;
+  const { keyword, productCode, error: errorMessage, agentId, agentIP, browser } = req.body;
 
   if (!keyword || !productCode || !errorMessage || !agentId) {
     throw new ApiError('VALIDATION_ERROR', 'Missing required fields', 400);
@@ -383,7 +396,9 @@ router.post('/failure', asyncHandler(async (req: Request, res: Response) => {
       keyword, 
       productCode, 
       error: errorMessage,
-      agentId 
+      agentId,
+      agentIP,
+      browser
     });
 
     res.json({
