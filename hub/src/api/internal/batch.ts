@@ -33,6 +33,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
 
   const limitNum = Math.min(parseInt(limit as string) || 10, 100);
   const minCheckInterval = parseInt(process.env.MIN_CHECK_INTERVAL || '600'); // 기본 10분
+  const syncTimeLimit = parseInt(process.env.SYNC_TIME_LIMIT || '60'); // 기본 60분
 
   try {
     // 처리 가능한 키워드 조회
@@ -60,6 +61,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         AND kl.product_code = krc.product_code 
         AND krc.check_date = CURRENT_DATE
       WHERE kl.is_active = TRUE 
+        AND kl.last_sync_at > NOW() - INTERVAL '${syncTimeLimit} minutes'
         AND (
           krc.id IS NULL  -- 오늘 첫 체크
           OR (

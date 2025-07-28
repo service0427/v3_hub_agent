@@ -127,10 +127,15 @@ async function searchKeyword(page, keyword, product_code) {
       const productCount = productList ? productList.querySelectorAll('li[data-id]').length : 0;
       
       const bodyText = document.body?.innerText || '';
+      const pageTitle = document.title || '';
       const isErrorPage = bodyText.includes('Secure Connection Failed') || 
                          bodyText.includes('NS_ERROR_NET_INTERRUPT') ||
                          bodyText.includes('The connection to') ||
-                         bodyText.includes('was interrupted');
+                         bodyText.includes('was interrupted') ||
+                         bodyText.includes('ERR_') ||
+                         bodyText.includes('HTTP2_PROTOCOL_ERROR') ||
+                         pageTitle.includes('Error') ||
+                         pageTitle.includes('오류');
       
       return {
         hasNoResult: !!noResultElement || !!noResultText,
@@ -156,7 +161,16 @@ async function searchKeyword(page, keyword, product_code) {
       try {
         await page.waitForSelector('#product-list > li[data-id]', { timeout: 8000 }); // 전체 30초 제한 내 동작
       } catch (error) {
-        logger.warn(`Product list not found for: ${keyword}`);
+        // 네트워크 오류인지 확인
+        const pageUrl = page.url();
+        const pageTitle = await page.title().catch(() => '');
+        
+        if (pageUrl.includes('error') || pageTitle.includes('Error') || pageTitle.includes('오류')) {
+          logger.error(`Network/page error for ${keyword} - URL: ${pageUrl}`);
+          throw new Error(`Page error detected: ${pageTitle}`);
+        }
+        
+        logger.warn(`Product list not found for: ${keyword} (실제로 상품이 없을 수 있음)`);
         return null;
       }
     }
