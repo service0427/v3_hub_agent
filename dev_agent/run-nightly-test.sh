@@ -21,9 +21,10 @@ echo "✅ Firefox found: $(firefox --version 2>/dev/null || echo 'Version check 
 export AGENT_ID="firefox-nightly-test"
 export LOG_LEVEL="info"
 
-echo "🚀 Starting Firefox Test..."
+echo "🚀 Starting Firefox Test (FAST BLOCK DETECTION)..."
 echo "Agent ID: $AGENT_ID"
 echo "Log Level: $LOG_LEVEL"
+echo "⚠️  Will EXIT IMMEDIATELY if blocking detected!"
 echo ""
 
 # Node.js로 테스트 실행
@@ -33,7 +34,10 @@ exit_code=$?
 
 echo ""
 if [ $exit_code -eq 0 ]; then
-    echo "🎉 Firefox test completed successfully!"
+    echo "🎉 Firefox test completed successfully - NO BLOCKING DETECTED!"
+elif [ $exit_code -eq 1 ]; then
+    echo "🚨 BLOCKING DETECTED - Test terminated immediately!"
+    echo "🛡️  Need to implement anti-blocking measures"
 else
     echo "❌ Firefox test failed with exit code: $exit_code"
 fi

@@ -23,7 +23,8 @@ const config = {
   headless: false, // GUI 모드 필수
   logLevel: 'info',
   maxPages: 3,
-  delayBetweenRequests: 3000 // 3초 대기
+  delayBetweenRequests: 1000, // 1초 대기 (빠른 테스트)
+  exitOnBlock: true // 차단 감지시 즉시 종료
 };
 
 // Logger setup
@@ -54,19 +55,29 @@ async function testSearch(page, keyword, productCode) {
     
     logger.info(`📍 Navigating to: ${searchUrl}`);
     
-    // 페이지 이동 (30초 타임아웃)
+    // 페이지 이동 (10초 타임아웃으로 단축)
     await page.goto(searchUrl, { 
-      timeout: 30000,
+      timeout: 10000,
       waitUntil: 'domcontentloaded' 
     });
     
-    await page.waitForTimeout(2000); // 페이지 안정화 대기
+    // 즉시 차단 체크 (대기 시간 최소화)
+    await page.waitForTimeout(500); // 500ms만 대기
     
-    // 차단 페이지 체크
+    // 1차 빠른 차단 체크
+    const quickBlock = await quickBlockCheck(page);
+    if (quickBlock.blocked) {
+      logger.error(`🚨 QUICK BLOCK DETECTED: ${quickBlock.reason}`);
+      logger.error(`🛑 TERMINATING TEST IMMEDIATELY`);
+      process.exit(1); // 즉시 종료
+    }
+    
+    // 2차 상세 차단 체크
     const isBlocked = await checkIfBlocked(page);
     if (isBlocked.blocked) {
       logger.error(`❌ BLOCKED: ${isBlocked.reason}`);
-      return { success: false, blocked: true, reason: isBlocked.reason };
+      logger.error(`🛑 TERMINATING TEST`);
+      process.exit(1); // 즉시 종료
     }
     
     // 검색 결과 확인
@@ -82,6 +93,16 @@ async function testSearch(page, keyword, productCode) {
     
   } catch (error) {
     logger.error(`❌ Search failed: ${error.message}`);
+    
+    // 타임아웃이나 연결 오류도 차단 신호일 수 있음
+    if (error.message.includes('timeout') || 
+        error.message.includes('net::') || 
+        error.message.includes('Navigation')) {
+      logger.error(`🚨 NETWORK/TIMEOUT ERROR - POSSIBLE BLOCK`);
+      logger.error(`🛑 TERMINATING TEST DUE TO POSSIBLE BLOCKING`);
+      process.exit(1);
+    }
+    
     return { 
       success: false, 
       blocked: false, 
@@ -89,6 +110,68 @@ async function testSearch(page, keyword, productCode) {
       keyword,
       productCode 
     };
+  }
+}
+
+// 빠른 차단 감지 (즉시 종료용)
+async function quickBlockCheck(page) {
+  try {
+    const url = page.url();
+    
+    // 즉시 확인 가능한 차단 신호들
+    const blockSignals = [
+      'error', 'blocked', 'captcha', 'forbidden', 'denied',
+      'security', '차단', '접근', '거부', '보안'
+    ];
+    
+    // URL에서 차단 신호 확인
+    for (const signal of blockSignals) {
+      if (url.toLowerCase().includes(signal)) {
+        return { blocked: true, reason: `Blocked URL signal: ${signal} in ${url}` };
+      }
+    }
+    
+    // 페이지 제목 빠른 체크
+    try {
+      const title = await page.title();
+      for (const signal of blockSignals) {
+        if (title.toLowerCase().includes(signal)) {
+          return { blocked: true, reason: `Blocked title signal: ${signal} in ${title}` };
+        }
+      }
+    } catch (e) {
+      // 제목 가져오기 실패도 차단 신호일 수 있음
+      return { blocked: true, reason: 'Cannot get page title - possible block' };
+    }
+    
+    // 페이지 상태 코드 확인
+    try {
+      const response = await page.evaluate(() => {
+        return {
+          readyState: document.readyState,
+          hasBody: !!document.body,
+          bodyText: document.body ? document.body.innerText.substring(0, 200) : ''
+        };
+      });
+      
+      if (!response.hasBody) {
+        return { blocked: true, reason: 'No page body - possible block' };
+      }
+      
+      const text = response.bodyText.toLowerCase();
+      for (const signal of blockSignals) {
+        if (text.includes(signal)) {
+          return { blocked: true, reason: `Blocked content signal: ${signal}` };
+        }
+      }
+    } catch (e) {
+      return { blocked: true, reason: 'Cannot evaluate page - possible block' };
+    }
+    
+    return { blocked: false };
+    
+  } catch (error) {
+    return { blocked: true, reason: `Quick check failed: ${error.message}` };
   }
 }
 
@@ -252,6 +335,15 @@ async function runNightlyTest() {
     
   } catch (error) {
     logger.error(`💥 Test failed: ${error.message}`);
+    
+    // 브라우저 실행 실패도 차단 가능성
+    if (error.message.includes('launch') || 
+        error.message.includes('connect') ||
+        error.message.includes('browser')) {
+      logger.error(`🚨 BROWSER LAUNCH FAILED - POSSIBLE SYSTEM BLOCK`);
+      logger.error(`🛑 TERMINATING TEST`);
+      process.exit(1);
+    }
   } finally {
     if (browser) {
       await browser.close();

@@ -1,8 +1,14 @@
-# Firefox Nightly 테스트 가이드
+# Firefox 차단 감지 테스트 가이드
 
 ## 📋 개요
-서비스에 영향을 주지 않는 독립적인 Firefox Nightly 테스트 도구입니다.
-API 호출 없이 단순히 차단 우회 및 검색 기능만 테스트합니다.
+서비스에 영향을 주지 않는 독립적인 Firefox 차단 감지 테스트 도구입니다.
+API 호출 없이 차단을 **즉시 감지하고 빠르게 종료**하여 안전을 보장합니다.
+
+## ⚡ 빠른 차단 감지 특징
+- **500ms 내 1차 차단 감지**
+- **차단 감지시 즉시 `process.exit(1)` 호출**
+- **타임아웃/네트워크 오류도 차단으로 간주**
+- **브라우저 실행 실패시에도 즉시 종료**
 
 ## 🔥 Firefox Nightly 설치
 
@@ -50,21 +56,24 @@ AGENT_ID="firefox-nightly-test" node test-nightly.js
 - 블루투스스피커
 - 휴대용충전기
 
-### 테스트 항목
-1. **차단 감지**: 
-   - URL 기반 차단 (`error`, `blocked`, `captcha`)
-   - 제목 기반 차단 (`Error`, `차단`, `접근이 거부`)
-   - 내용 기반 차단 (`접근이 차단`, `보안 문자`, `captcha`)
+### 차단 감지 방식
+1. **즉시 차단 감지 (500ms 내)**:
+   - URL 신호: `error`, `blocked`, `captcha`, `forbidden`, `denied`
+   - 제목 신호: `Error`, `차단`, `접근`, `거부`, `보안`
+   - 페이지 상태: body 없음, 평가 실패
+   - 내용 신호: `접근이 차단`, `보안 문자`, `captcha`
 
-2. **검색 기능**:
-   - 검색 결과 존재 여부
-   - 상품 개수 확인
-   - 목표 상품 순위 찾기 (테스트용)
+2. **네트워크 오류 감지**:
+   - Navigation timeout
+   - net:: 오류
+   - Connection 실패
 
-3. **안정성 테스트**:
-   - 페이지 로딩 성공률
-   - 에러 발생률
-   - 브라우저 안정성
+3. **브라우저 오류 감지**:
+   - Launch 실패
+   - Connect 실패
+   - Browser 오류
+
+**⚠️ 모든 차단 감지시 즉시 `process.exit(1)` 호출**
 
 ## 📈 결과 분석
 
@@ -74,14 +83,22 @@ AGENT_ID="firefox-nightly-test" node test-nightly.js
 🎯 Target found at rank: 15
 ```
 
-### 차단 케이스
+### 차단 케이스 (즉시 종료)
 ```
-❌ BLOCKED: Blocked content detected in page
+🚨 QUICK BLOCK DETECTED: Blocked URL signal: captcha in https://...
+🛑 TERMINATING TEST IMMEDIATELY
 ```
 
-### 실패 케이스
+### 네트워크 차단 (즉시 종료)
 ```
-❌ Failed: 무선이어폰 - Navigation timeout
+🚨 NETWORK/TIMEOUT ERROR - POSSIBLE BLOCK
+🛑 TERMINATING TEST DUE TO POSSIBLE BLOCKING
+```
+
+### 브라우저 차단 (즉시 종료)
+```
+🚨 BROWSER LAUNCH FAILED - POSSIBLE SYSTEM BLOCK
+🛑 TERMINATING TEST
 ```
 
 ## 📁 로그 파일
@@ -114,19 +131,22 @@ testProductCodes: [
 ### 기타 설정
 ```javascript
 const config = {
-  delayBetweenRequests: 3000,  // 요청 간 대기시간 (ms)
+  delayBetweenRequests: 1000,  // 요청 간 대기시간 (1초로 단축)
   maxPages: 3,                 // 최대 검색 페이지
   headless: false,             // 항상 GUI 모드
-  logLevel: 'info'             // 로그 레벨
+  logLevel: 'info',            // 로그 레벨
+  exitOnBlock: true            // 차단 감지시 즉시 종료
 };
 ```
 
 ## 🛡️ 보안 고려사항
 
 1. **서비스 영향 없음**: API 호출 없이 독립 실행
-2. **GUI 모드**: headless 모드 비활성화로 감지 회피
-3. **User Agent**: Windows Firefox로 설정
-4. **요청 간격**: 3초 대기로 과도한 요청 방지
+2. **즉시 종료**: 차단 감지시 500ms 내 즉시 종료
+3. **GUI 모드**: headless 모드 비활성화로 감지 회피
+4. **User Agent**: Windows Firefox로 설정
+5. **빠른 간격**: 1초 대기로 빠른 테스트 완료
+6. **안전 우선**: 의심스러운 신호도 차단으로 간주
 
 ## 🔧 문제 해결
 
