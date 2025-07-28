@@ -32,6 +32,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
   }
 
   const limitNum = Math.min(parseInt(limit as string) || 10, 100);
+  const minCheckInterval = parseInt(process.env.MIN_CHECK_INTERVAL || '600'); // 기본 10분
 
   try {
     // 처리 가능한 키워드 조회
@@ -60,17 +61,34 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         AND krc.check_date = CURRENT_DATE
       WHERE kl.is_active = TRUE 
         AND (
-          krc.id IS NULL
-          OR krc.check_1 IS NULL
-          OR krc.check_2 IS NULL
-          OR krc.check_3 IS NULL
-          OR krc.check_4 IS NULL
-          OR krc.check_5 IS NULL
-          OR krc.check_6 IS NULL
-          OR krc.check_7 IS NULL
-          OR krc.check_8 IS NULL
-          OR krc.check_9 IS NULL
-          OR krc.check_10 IS NULL
+          krc.id IS NULL  -- 오늘 첫 체크
+          OR (
+            -- 마지막 체크로부터 최소 간격(기본 10분) 이상 경과
+            EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+              COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+            ))) >= $2
+            AND (
+              krc.check_1 IS NULL
+              OR krc.check_2 IS NULL
+              OR krc.check_3 IS NULL
+              OR krc.check_4 IS NULL
+              OR krc.check_5 IS NULL
+              OR krc.check_6 IS NULL
+              OR krc.check_7 IS NULL
+              OR krc.check_8 IS NULL
+              OR krc.check_9 IS NULL
+              OR krc.check_10 IS NULL
+            )
+          )
         )
       ORDER BY 
         CASE 
@@ -82,7 +100,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
       LIMIT $1
     `;
 
-    const result = await pool.query(query, [limitNum * 2]); // 락 실패 대비 2배 조회
+    const result = await pool.query(query, [limitNum * 2, minCheckInterval]); // 락 실패 대비 2배 조회
 
     // 락 획득 시도
     const keywords = lockManager.acquireMultipleLocks(
