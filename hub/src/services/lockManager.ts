@@ -11,7 +11,7 @@ interface Lock {
 
 export class LockManager {
   private locks: Map<string, Lock> = new Map();
-  private readonly lockTimeout = 30000; // 30초
+  private readonly lockTimeout = 60000; // 60초 (크롤링 시간 고려)
   private cleanupInterval: NodeJS.Timeout;
 
   constructor() {

@@ -66,18 +66,45 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
           krc.id IS NULL  -- 오늘 첫 체크
           OR (
             -- 마지막 체크로부터 최소 간격(기본 10분) 이상 경과
-            EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
-              COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
-              COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
-            ))) >= $2
+            CASE
+              WHEN CURRENT_TIME >= GREATEST(
+                COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+                COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+              ) THEN
+                EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+                  COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+                )))
+              ELSE -- 자정을 넘어간 경우
+                86400 + EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+                  COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+                  COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+                )))
+            END >= $2
             AND (
               krc.check_1 IS NULL
               OR krc.check_2 IS NULL
