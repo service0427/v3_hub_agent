@@ -69,7 +69,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         ) as last_check_time,
         CURRENT_TIME as current_time,
         CASE
-          WHEN CURRENT_TIME >= GREATEST(
+          WHEN CURRENT_TIME::TIME >= GREATEST(
             COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
             COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
             COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
@@ -119,7 +119,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
           OR (
             -- 마지막 체크로부터 최소 간격(기본 10분) 이상 경과
             CASE
-              WHEN CURRENT_TIME >= GREATEST(
+              WHEN CURRENT_TIME::TIME >= GREATEST(
                 COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
                 COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
                 COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
@@ -131,7 +131,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
                 COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
                 COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
               ) THEN
-                EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+                EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - GREATEST(
                   COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
                   COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
                   COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
@@ -144,7 +144,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
                   COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
                 )))
               ELSE -- 자정을 넘어간 경우
-                86400 + EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+                86400 + EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - GREATEST(
                   COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
                   COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
                   COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
@@ -192,20 +192,23 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
     
     const result = await pool.query(query, [fetchLimit, minCheckInterval]);
     
-    // 디버그용: 모든 키워드 확인 (조건 무시)
+    // 디버그용: 30분 이상 경과한 키워드 찾기
     const debugQuery = `
       SELECT 
         kl.keyword, 
         kl.product_code,
         krc.check_time_1,
-        krc.check_time_2,
-        krc.check_time_3,
         CURRENT_TIME as current_time,
         CASE
           WHEN krc.check_time_1 IS NOT NULL THEN
             EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.check_time_1::TIME))
           ELSE NULL
-        END as seconds_since_check_1
+        END as seconds_since_check_1,
+        CASE 
+          WHEN krc.check_time_1 IS NOT NULL THEN
+            EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.check_time_1::TIME)) >= ${minCheckInterval}
+          ELSE TRUE
+        END as is_eligible
       FROM v3_keyword_list kl
       LEFT JOIN v3_keyword_ranking_checks krc 
         ON kl.keyword = krc.keyword 
@@ -213,20 +216,22 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         AND krc.check_date = CURRENT_DATE
       WHERE kl.is_active = TRUE 
         AND kl.last_sync_at > NOW() - INTERVAL '${syncTimeLimit} minutes'
-      ORDER BY krc.updated_at DESC NULLS LAST
-      LIMIT 3
+      ORDER BY seconds_since_check_1 DESC NULLS LAST
+      LIMIT 5
     `;
     
     const debugResult = await pool.query(debugQuery);
 
     logger.info('Debug query result (all keywords)', {
       debugRowCount: debugResult.rows.length,
+      minCheckInterval,
       debugRows: debugResult.rows.map(row => ({
         keyword: row.keyword,
         productCode: row.product_code,
         checkTime1: row.check_time_1,
         currentTime: row.current_time,
-        secondsSinceCheck1: row.seconds_since_check_1
+        secondsSinceCheck1: row.seconds_since_check_1,
+        isEligible: row.is_eligible
       }))
     });
 
