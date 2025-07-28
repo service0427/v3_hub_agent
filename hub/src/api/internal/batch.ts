@@ -138,7 +138,7 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
  * 순위 결과 저장
  */
 router.post('/result', asyncHandler(async (req: Request, res: Response) => {
-  const { keyword, productCode, rank, agentId } = req.body;
+  const { keyword, productCode, rank, agentId, productName, thumbnailUrl, rating, reviewCount } = req.body;
 
   if (!keyword || !productCode || rank === undefined || !agentId) {
     throw new ApiError('VALIDATION_ERROR', 'Missing required fields', 400);
@@ -225,6 +225,38 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
 
     // 통계 업데이트
     await updateStatistics(keyword, productCode);
+
+    // 상품 정보 업데이트 (상품을 찾았을 때만)
+    if (rankValue > 0 && (productName || thumbnailUrl || rating !== undefined || reviewCount !== undefined)) {
+      const updateProductQuery = `
+        UPDATE v3_keyword_list 
+        SET 
+          product_name = COALESCE($1, product_name),
+          thumbnail_url = COALESCE($2, thumbnail_url),
+          rating = COALESCE($3::DECIMAL(2,1), rating),
+          review_count = COALESCE($4::INTEGER, review_count),
+          product_info_updated_at = NOW(),
+          updated_at = NOW()
+        WHERE keyword = $5 AND product_code = $6
+      `;
+      
+      await pool.query(updateProductQuery, [
+        productName || null,
+        thumbnailUrl || null,
+        rating || null,
+        reviewCount || null,
+        keyword,
+        productCode
+      ]);
+      
+      logger.info('Product info updated', {
+        keyword,
+        productCode,
+        productName: productName || 'not updated',
+        rating: rating || 'not updated',
+        reviewCount: reviewCount || 'not updated'
+      });
+    }
 
     logger.info('Result saved', { 
       keyword, 

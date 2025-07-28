@@ -73,14 +73,24 @@ async function getKeywordsFromAPI(limit) {
 }
 
 // Save ranking result to API
-async function saveRankingResult(keyword, product_code, rank) {
+async function saveRankingResult(keyword, product_code, rank, productInfo = null) {
   try {
-    await apiClient.post('/result', {
+    const payload = {
       keyword,
       productCode: product_code,
       rank,
       agentId: config.agentId
-    });
+    };
+    
+    // 상품 정보가 있으면 추가
+    if (productInfo) {
+      payload.productName = productInfo.productName;
+      payload.thumbnailUrl = productInfo.thumbnailUrl;
+      payload.rating = productInfo.rating;
+      payload.reviewCount = productInfo.reviewCount;
+    }
+    
+    await apiClient.post('/result', payload);
     
     logger.info(`Result saved via API: ${keyword} - rank ${rank || 'not found'}`);
   } catch (error) {
@@ -216,7 +226,46 @@ async function searchKeyword(page, keyword, product_code) {
                 String(productId) === codeStr ||
                 String(itemId) === codeStr ||
                 String(vendorItemId) === codeStr) {
-              return i + 1; // realRank (광고 제외)
+              
+              // 상품 정보 추출
+              const imgElement = product.querySelector('img');
+              const productName = imgElement ? imgElement.getAttribute('alt') : 'Unknown';
+              const thumbnailUrl = imgElement ? imgElement.getAttribute('src') : null;
+              
+              // 평점 추출
+              let rating = null;
+              let reviewCount = null;
+              
+              try {
+                const ratingContainer = product.querySelector('[class*="ProductRating_productRating__"]');
+                if (ratingContainer) {
+                  const ratingSpan = ratingContainer.querySelector('[class*="ProductRating_rating__"]');
+                  if (ratingSpan) {
+                    const ratingText = ratingSpan.textContent.trim();
+                    const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
+                    if (ratingMatch) {
+                      rating = parseFloat(ratingMatch[1]).toFixed(1);
+                    }
+                  }
+                  
+                  const reviewCountElement = ratingContainer.querySelector('[class*="ProductRating_ratingCount__"]');
+                  if (reviewCountElement) {
+                    const reviewText = reviewCountElement.textContent || reviewCountElement.innerText;
+                    const reviewMatch = reviewText.match(/\(?\s*(\d+)\s*\)?/);
+                    if (reviewMatch) {
+                      reviewCount = parseInt(reviewMatch[1]);
+                    }
+                  }
+                }
+              } catch (e) {}
+              
+              return {
+                rank: i + 1, // realRank (광고 제외)
+                productName: productName,
+                thumbnailUrl: thumbnailUrl,
+                rating: rating,
+                reviewCount: reviewCount
+              };
             }
           }
         }
@@ -225,14 +274,21 @@ async function searchKeyword(page, keyword, product_code) {
       }, product_code);
       
       if (result) {
-        foundRank = (currentPage - 1) * 72 + result;
-        break;
+        foundRank = (currentPage - 1) * 72 + result.rank;
+        // 상품 정보도 함께 반환하기 위해 result 객체 저장
+        return {
+          rank: foundRank,
+          productName: result.productName,
+          thumbnailUrl: result.thumbnailUrl,
+          rating: result.rating,
+          reviewCount: result.reviewCount
+        };
       }
       
       currentPage++;
     }
     
-    return foundRank;
+    return foundRank; // 이미 위에서 상품 정보와 함께 리턴했으므로 여기는 null을 리턴하는 경우임
     
   } catch (error) {
     logger.error(`Search failed for ${keyword}:`, error.message);
@@ -257,9 +313,13 @@ async function processBatch(browser, keywords, stats) {
       
       try {
         logger.info(`Checking: ${keyword} (${product_code})`);
-        const rank = await searchKeyword(page, keyword, product_code);
+        const result = await searchKeyword(page, keyword, product_code);
         
-        await saveRankingResult(keyword, product_code, rank);
+        // result가 객체인 경우 (상품 정보 포함) vs null/number인 경우 구분
+        const rank = result && typeof result === 'object' ? result.rank : result;
+        const productInfo = result && typeof result === 'object' ? result : null;
+        
+        await saveRankingResult(keyword, product_code, rank, productInfo);
         
         stats.checked++;
         if (rank) {
