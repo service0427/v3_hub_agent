@@ -182,17 +182,15 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
 
     const checkColumn = `check_${checkNumber}`;
     const checkTimeColumn = `check_time_${checkNumber}`;
-    const ratingColumn = `rating_${checkNumber}`;
-    const reviewCountColumn = `review_count_${checkNumber}`;
     const rankValue = rank || 0; // null을 0으로
 
-    // 결과 저장
+    // 결과 저장 (평점과 리뷰수는 최신값으로 업데이트)
     const updateQuery = `
       UPDATE v3_keyword_ranking_checks 
       SET ${checkColumn} = $1::INTEGER, 
           ${checkTimeColumn} = CURRENT_TIME,
-          ${ratingColumn} = $4::DECIMAL(2,1),
-          ${reviewCountColumn} = $5::INTEGER,
+          rating = COALESCE($4::DECIMAL(2,1), rating),
+          review_count = COALESCE($5::INTEGER, review_count),
           total_checks = total_checks + 1,
           found_count = found_count + CASE WHEN $1::INTEGER > 0 THEN 1 ELSE 0 END,
           updated_at = NOW()
@@ -208,14 +206,14 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
       const insertQuery = `
         INSERT INTO v3_keyword_ranking_checks 
         (keyword, product_code, check_date, ${checkColumn}, ${checkTimeColumn}, 
-         ${ratingColumn}, ${reviewCountColumn}, total_checks, found_count)
+         rating, review_count, total_checks, found_count)
         VALUES ($1, $2, CURRENT_DATE, $3::INTEGER, CURRENT_TIME, $4::DECIMAL(2,1), $5::INTEGER, 1, $6)
         ON CONFLICT (keyword, product_code, check_date) 
         DO UPDATE SET 
           ${checkColumn} = $3::INTEGER,
           ${checkTimeColumn} = CURRENT_TIME,
-          ${ratingColumn} = $4::DECIMAL(2,1),
-          ${reviewCountColumn} = $5::INTEGER,
+          rating = COALESCE($4::DECIMAL(2,1), v3_keyword_ranking_checks.rating),
+          review_count = COALESCE($5::INTEGER, v3_keyword_ranking_checks.review_count),
           total_checks = v3_keyword_ranking_checks.total_checks + 1,
           found_count = v3_keyword_ranking_checks.found_count + CASE WHEN $3::INTEGER > 0 THEN 1 ELSE 0 END,
           updated_at = NOW()
