@@ -182,6 +182,8 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
 
     const checkColumn = `check_${checkNumber}`;
     const checkTimeColumn = `check_time_${checkNumber}`;
+    const ratingColumn = `rating_${checkNumber}`;
+    const reviewCountColumn = `review_count_${checkNumber}`;
     const rankValue = rank || 0; // null을 0으로
 
     // 결과 저장
@@ -189,6 +191,8 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
       UPDATE v3_keyword_ranking_checks 
       SET ${checkColumn} = $1::INTEGER, 
           ${checkTimeColumn} = CURRENT_TIME,
+          ${ratingColumn} = $4::DECIMAL(2,1),
+          ${reviewCountColumn} = $5::INTEGER,
           total_checks = total_checks + 1,
           found_count = found_count + CASE WHEN $1::INTEGER > 0 THEN 1 ELSE 0 END,
           updated_at = NOW()
@@ -197,19 +201,21 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
         AND check_date = CURRENT_DATE
     `;
 
-    const updateResult = await pool.query(updateQuery, [rankValue, keyword, productCode]);
+    const updateResult = await pool.query(updateQuery, [rankValue, keyword, productCode, rating || null, reviewCount || null]);
 
     // 없으면 INSERT
     if (updateResult.rowCount === 0) {
       const insertQuery = `
         INSERT INTO v3_keyword_ranking_checks 
         (keyword, product_code, check_date, ${checkColumn}, ${checkTimeColumn}, 
-         total_checks, found_count)
-        VALUES ($1, $2, CURRENT_DATE, $3::INTEGER, CURRENT_TIME, 1, $4)
+         ${ratingColumn}, ${reviewCountColumn}, total_checks, found_count)
+        VALUES ($1, $2, CURRENT_DATE, $3::INTEGER, CURRENT_TIME, $4::DECIMAL(2,1), $5::INTEGER, 1, $6)
         ON CONFLICT (keyword, product_code, check_date) 
         DO UPDATE SET 
           ${checkColumn} = $3::INTEGER,
           ${checkTimeColumn} = CURRENT_TIME,
+          ${ratingColumn} = $4::DECIMAL(2,1),
+          ${reviewCountColumn} = $5::INTEGER,
           total_checks = v3_keyword_ranking_checks.total_checks + 1,
           found_count = v3_keyword_ranking_checks.found_count + CASE WHEN $3::INTEGER > 0 THEN 1 ELSE 0 END,
           updated_at = NOW()
@@ -218,7 +224,9 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
       await pool.query(insertQuery, [
         keyword, 
         productCode, 
-        rankValue, 
+        rankValue,
+        rating || null,
+        reviewCount || null,
         rankValue > 0 ? 1 : 0
       ]);
     }
@@ -227,24 +235,20 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
     await updateStatistics(keyword, productCode);
 
     // 상품 정보 업데이트 (상품을 찾았을 때만)
-    if (rankValue > 0 && (productName || thumbnailUrl || rating !== undefined || reviewCount !== undefined)) {
+    if (rankValue > 0 && (productName || thumbnailUrl)) {
       const updateProductQuery = `
         UPDATE v3_keyword_list 
         SET 
           product_name = COALESCE($1, product_name),
           thumbnail_url = COALESCE($2, thumbnail_url),
-          rating = COALESCE($3::DECIMAL(2,1), rating),
-          review_count = COALESCE($4::INTEGER, review_count),
           product_info_updated_at = NOW(),
           updated_at = NOW()
-        WHERE keyword = $5 AND product_code = $6
+        WHERE keyword = $3 AND product_code = $4
       `;
       
       await pool.query(updateProductQuery, [
         productName || null,
         thumbnailUrl || null,
-        rating || null,
-        reviewCount || null,
         keyword,
         productCode
       ]);
@@ -253,8 +257,7 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
         keyword,
         productCode,
         productName: productName || 'not updated',
-        rating: rating || 'not updated',
-        reviewCount: reviewCount || 'not updated'
+        thumbnailUrl: thumbnailUrl ? 'updated' : 'not updated'
       });
     }
 
