@@ -1,0 +1,23 @@
+{
+  "name": "v3-dev-agent",
+  "version": "1.0.0",
+  "description": "ParserHub V3 Development Agent for GUI Testing",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "chrome": "BROWSER_TYPE=chrome node src/index.js",
+    "chromium": "BROWSER_TYPE=chromium node src/index.js",
+    "firefox": "BROWSER_TYPE=firefox node src/index.js",
+    "edge": "BROWSER_TYPE=edge node src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "dotenv": "^16.3.1",
+    "pg": "^8.16.3",
+    "playwright": "^1.40.0",
+    "winston": "^3.11.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
