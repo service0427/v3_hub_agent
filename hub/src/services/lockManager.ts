@@ -149,6 +149,16 @@ export class LockManager {
   }
 
   /**
+   * 현재 락에 걸린 키워드 목록 조회
+   */
+  getLockedKeywords(): Array<{keyword: string, productCode: string}> {
+    return Array.from(this.locks.values()).map(lock => ({
+      keyword: lock.keyword,
+      productCode: lock.productCode
+    }));
+  }
+
+  /**
    * 현재 락 상태 조회
    */
   getStatus(): { total: number, locks: Lock[] } {

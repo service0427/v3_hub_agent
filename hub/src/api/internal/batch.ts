@@ -36,8 +36,13 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
   const syncTimeLimit = parseInt(process.env.SYNC_TIME_LIMIT || '60'); // 기본 60분
 
   try {
+    // 현재 락에 걸린 키워드 목록 가져오기
+    const lockedKeywords = lockManager.getLockedKeywords();
+    
+    logger.info('Locked keywords count', { count: lockedKeywords.length });
+    
     // 처리 가능한 키워드 조회
-    const query = `
+    let query = `
       SELECT 
         kl.keyword, 
         kl.product_code,
@@ -129,7 +134,9 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
       LIMIT $1
     `;
 
-    const result = await pool.query(query, [limitNum * 2, minCheckInterval]); // 락 실패 대비 2배 조회
+    // 락 실패를 고려하여 더 많은 키워드 조회
+    const fetchLimit = Math.min(limitNum * 20, 200); // 최대 200개까지 조회
+    const result = await pool.query(query, [fetchLimit, minCheckInterval]);
 
     // 락 획득 시도
     const keywords = lockManager.acquireMultipleLocks(
@@ -143,6 +150,8 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
     logger.info('Keywords assigned to agent', { 
       agentId, 
       requested: limitNum,
+      available: result.rows.length,
+      locked: lockedKeywords.length,
       assigned: keywords.length 
     });
 
