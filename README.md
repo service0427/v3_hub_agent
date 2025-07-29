@@ -9,10 +9,10 @@ ParserHub V3는 쿠팡 전용으로 특화된 실시간 제품 순위 조회 서
 ## ✨ 주요 특징
 
 - **🎯 쿠팡 전용**: 네이버 등 타 플랫폼 제거로 성능 최적화
-- **🖥️ 멀티 브라우저 지원**: 크롬/파이어폭스/파이어폭스Nightly/엣지 지원
+- **🚀 원클릭 설치**: curl 명령어 하나로 에이전트 자동 설치
 - **⚡ 실시간 조회**: 캐시 없이 에이전트 직접 크롤링
 - **💰 과금 시스템**: keyword+code 조합별 일일 30원 과금
-- **🛡️ 차단 회피**: 브라우저별 분산으로 차단 리스크 최소화
+- **🛡️ 차단 회피**: 자동 대기 시간 조정으로 차단 회피
 
 ## 🏗️ 시스템 아키텍처
 
@@ -50,23 +50,31 @@ pm2 start dist/index.js --name parserhub-v3
 npm run dev
 ```
 
-### 2. 에이전트 설정 (Linux)
+### 2. 에이전트 설치 (Linux)
 
+#### 🚀 원클릭 설치 (권장)
 ```bash
-cd agent/
-npm install
-
-# 브라우저 설치 (Playwright)
-npx playwright install chromium firefox
-
-# Firefox Nightly 설치
-wget -O firefox-nightly.tar.bz2 "https://download.mozilla.org/?product=firefox-nightly-latest&os=linux64"
-tar -xjf firefox-nightly.tar.bz2
-sudo mv firefox /usr/bin/firefox-nightly
-
-# GUI 모드 필수 - manage.sh 사용
-./manage.sh
+curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/dev_agent/install.sh | bash
 ```
+
+설치 완료 후:
+```bash
+# 새 터미널을 열거나
+source ~/.bashrc
+
+# 연속 실행 모드 시작
+v3-agent start
+
+# 또는 단일 체크 테스트
+v3-agent check
+```
+
+#### 전역 명령어
+- `v3-agent start` - 연속 실행 모드
+- `v3-agent check [n]` - n개 키워드 체크
+- `v3-agent status` - 실행 상태 확인
+- `v3-agent logs` - 로그 확인
+- `v3-agent update` - 최신 버전 업데이트
 
 ### 3. API 테스트
 
@@ -259,9 +267,10 @@ npm run build
 - ✅ 과금 시스템 (일일 중복 제거)
 - ✅ Socket.io 에이전트 통신
 - ✅ PM2 배포 스크립트
-- ✅ Linux 에이전트 (Chrome/Firefox/Firefox Nightly)
+- ✅ Linux 에이전트 (Chrome 전용)
 - ✅ 하트비트 모니터링 시스템
 - ✅ 단순 롤링 전략
+- ✅ 원클릭 설치 시스템 (curl 설치)
 
 ### 진행 예정
 - ⏳ Windows VM 에이전트 개발
