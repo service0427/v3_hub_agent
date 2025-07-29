@@ -48,13 +48,14 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
     
     logger.info('Locked keywords count', { count: lockedKeywords.length });
     
-    // 처리 가능한 키워드 조회
+    // 처리 가능한 키워드 조회 (processing_time 조건 추가)
     let query = `
       SELECT 
         kl.keyword, 
         kl.product_code,
         krc.id as check_id,
         krc.updated_at,
+        krc.processing_time,
         GREATEST(
           COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
           COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
@@ -114,6 +115,13 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         AND krc.check_date = CURRENT_DATE
       WHERE kl.is_active = TRUE 
         AND kl.last_sync_at > NOW() - INTERVAL '${syncTimeLimit} minutes'
+        AND (krc.is_completed IS NULL OR krc.is_completed = FALSE)  -- 완료되지 않은 것만
+        AND (
+          -- processing_time이 NULL이거나 60초 이상 경과한 경우만
+          krc.processing_time IS NULL 
+          OR EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.processing_time)) >= 60
+          OR (CURRENT_TIME::TIME < krc.processing_time AND EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.processing_time)) + 86400 >= 60)
+        )
         AND (
           krc.id IS NULL  -- 오늘 첫 체크
           OR (
@@ -198,12 +206,18 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         kl.keyword, 
         kl.product_code,
         krc.check_time_1,
+        krc.processing_time,
         CURRENT_TIME as current_time,
         CASE
           WHEN krc.check_time_1 IS NOT NULL THEN
             EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.check_time_1::TIME))
           ELSE NULL
         END as seconds_since_check_1,
+        CASE
+          WHEN krc.processing_time IS NOT NULL THEN
+            EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.processing_time))
+          ELSE NULL
+        END as seconds_since_processing,
         CASE 
           WHEN krc.check_time_1 IS NOT NULL THEN
             EXTRACT(EPOCH FROM (CURRENT_TIME::TIME - krc.check_time_1::TIME)) >= ${minCheckInterval}
@@ -229,8 +243,10 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         keyword: row.keyword,
         productCode: row.product_code,
         checkTime1: row.check_time_1,
+        processingTime: row.processing_time,
         currentTime: row.current_time,
         secondsSinceCheck1: row.seconds_since_check_1,
+        secondsSinceProcessing: row.seconds_since_processing,
         isEligible: row.is_eligible
       }))
     });
@@ -272,6 +288,35 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
       assigned: keywords.length 
     });
 
+    // 할당된 키워드들의 processing_time 업데이트
+    if (keywords.length > 0) {
+      const updateProcessingTimeQuery = `
+        UPDATE v3_keyword_ranking_checks
+        SET processing_time = CURRENT_TIME,
+            updated_at = NOW()
+        WHERE check_date = CURRENT_DATE
+          AND (keyword, product_code) IN (
+            ${keywords.map((_, idx) => `($${idx * 2 + 1}, $${idx * 2 + 2})`).join(', ')}
+          )
+      `;
+      
+      const updateParams: string[] = [];
+      keywords.forEach(k => {
+        updateParams.push(k.keyword, k.productCode);
+      });
+      
+      try {
+        await pool.query(updateProcessingTimeQuery, updateParams);
+        logger.info('Updated processing_time for assigned keywords', { 
+          count: keywords.length,
+          agentId 
+        });
+      } catch (error) {
+        logger.error('Failed to update processing_time', error);
+        // 업데이트 실패해도 키워드는 이미 할당되었으므로 계속 진행
+      }
+    }
+
     res.json({
       success: true,
       keywords: keywords.map(k => ({
@@ -283,6 +328,84 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Failed to get keywords', error);
     throw new ApiError('DATABASE_ERROR', 'Failed to get keywords', 500);
+  }
+}));
+
+/**
+ * GET /api/v3/internal/batch/check-info
+ * 키워드의 현재 체크 정보 조회
+ */
+router.get('/check-info', asyncHandler(async (req: Request, res: Response) => {
+  const { keyword, productCode, agentId } = req.query;
+  
+  if (!keyword || !productCode) {
+    throw new ApiError('VALIDATION_ERROR', 'keyword and productCode are required', 400);
+  }
+
+  try {
+    const query = `
+      SELECT 
+        id,
+        CASE 
+          WHEN check_1 IS NULL THEN 1
+          WHEN check_2 IS NULL THEN 2
+          WHEN check_3 IS NULL THEN 3
+          WHEN check_4 IS NULL THEN 4
+          WHEN check_5 IS NULL THEN 5
+          WHEN check_6 IS NULL THEN 6
+          WHEN check_7 IS NULL THEN 7
+          WHEN check_8 IS NULL THEN 8
+          WHEN check_9 IS NULL THEN 9
+          WHEN check_10 IS NULL THEN 10
+          ELSE 0
+        END as next_check_number,
+        COALESCE(
+          (check_1 IS NOT NULL)::int + 
+          (check_2 IS NOT NULL)::int + 
+          (check_3 IS NOT NULL)::int + 
+          (check_4 IS NOT NULL)::int + 
+          (check_5 IS NOT NULL)::int + 
+          (check_6 IS NOT NULL)::int + 
+          (check_7 IS NOT NULL)::int + 
+          (check_8 IS NOT NULL)::int + 
+          (check_9 IS NOT NULL)::int + 
+          (check_10 IS NOT NULL)::int, 0
+        ) as today_checks,
+        check_1, check_2, check_3
+      FROM v3_keyword_ranking_checks
+      WHERE keyword = $1 
+        AND product_code = $2 
+        AND check_date = CURRENT_DATE
+    `;
+    
+    const result = await pool.query(query, [keyword as string, productCode as string]);
+    
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      res.json({
+        success: true,
+        checkInfo: {
+          id: row.id,
+          nextCheckNumber: row.next_check_number,
+          todayChecks: row.today_checks,
+          previousChecks: [row.check_1, row.check_2, row.check_3]
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        checkInfo: {
+          id: null,
+          nextCheckNumber: 1,
+          todayChecks: 0,
+          previousChecks: []
+        }
+      });
+    }
+    
+  } catch (error) {
+    logger.error('Failed to get check info', error);
+    throw new ApiError('DATABASE_ERROR', 'Failed to get check info', 500);
   }
 }));
 
@@ -337,7 +460,7 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
     const checkTimeColumn = `check_time_${checkNumber}`;
     const rankValue = rank || 0; // null을 0으로
 
-    // 결과 저장 (평점과 리뷰수는 최신값으로 업데이트)
+    // 결과 저장 (평점과 리뷰수는 최신값으로 업데이트, processing_time은 NULL로 리셋)
     const updateQuery = `
       UPDATE v3_keyword_ranking_checks 
       SET ${checkColumn} = $1::INTEGER, 
@@ -346,6 +469,7 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
           review_count = COALESCE($5::INTEGER, review_count),
           total_checks = total_checks + 1,
           found_count = found_count + CASE WHEN $1::INTEGER > 0 THEN 1 ELSE 0 END,
+          processing_time = NULL,
           updated_at = NOW()
       WHERE keyword = $2 
         AND product_code = $3 
@@ -359,8 +483,8 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
       const insertQuery = `
         INSERT INTO v3_keyword_ranking_checks 
         (keyword, product_code, check_date, ${checkColumn}, ${checkTimeColumn}, 
-         rating, review_count, total_checks, found_count)
-        VALUES ($1, $2, CURRENT_DATE, $3::INTEGER, CURRENT_TIME, $4::DECIMAL(2,1), $5::INTEGER, 1, $6)
+         rating, review_count, total_checks, found_count, processing_time)
+        VALUES ($1, $2, CURRENT_DATE, $3::INTEGER, CURRENT_TIME, $4::DECIMAL(2,1), $5::INTEGER, 1, $6, NULL)
         ON CONFLICT (keyword, product_code, check_date) 
         DO UPDATE SET 
           ${checkColumn} = $3::INTEGER,
@@ -369,6 +493,7 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
           review_count = COALESCE($5::INTEGER, v3_keyword_ranking_checks.review_count),
           total_checks = v3_keyword_ranking_checks.total_checks + 1,
           found_count = v3_keyword_ranking_checks.found_count + CASE WHEN $3::INTEGER > 0 THEN 1 ELSE 0 END,
+          processing_time = NULL,
           updated_at = NOW()
       `;
 
@@ -384,6 +509,23 @@ router.post('/result', asyncHandler(async (req: Request, res: Response) => {
 
     // 통계 업데이트
     await updateStatistics(keyword, productCode);
+
+    // 연속 3번 0 체크 확인
+    await checkConsecutiveZeros(keyword, productCode);
+    
+    // 에이전트 통계 업데이트
+    await updateAgentStats(
+      agentId,
+      agentIP || null,
+      browser || 'unknown',
+      true, // success
+      rankValue > 0, // rankFound
+      false, // isBlocked
+      null, // errorType
+      null, // errorMessage
+      keyword,
+      productCode
+    );
 
     // 상품 정보 업데이트 (상품을 찾았을 때만)
     if (rankValue > 0 && (productName || thumbnailUrl)) {
@@ -460,6 +602,39 @@ router.post('/failure', asyncHandler(async (req: Request, res: Response) => {
   lockManager.releaseLock(keyword, productCode, agentId);
 
   try {
+    // processing_time을 NULL로 리셋
+    const resetProcessingTimeQuery = `
+      UPDATE v3_keyword_ranking_checks
+      SET processing_time = NULL,
+          updated_at = NOW()
+      WHERE keyword = $1 
+        AND product_code = $2 
+        AND check_date = CURRENT_DATE
+    `;
+    
+    await pool.query(resetProcessingTimeQuery, [keyword, productCode]);
+    
+    // 에러 타입 판별
+    const isBlocked = errorMessage && /BLOCKED|blocked|차단|403|chrome-error:|ERR_HTTP2_PROTOCOL_ERROR/i.test(errorMessage);
+    const errorType = isBlocked ? 'BLOCKED' : 
+                     errorMessage.includes('Timeout') ? 'TIMEOUT' :
+                     errorMessage.includes('Network') ? 'NETWORK' :
+                     errorMessage.includes('HTTP2') ? 'HTTP2_ERROR' : 'SEARCH_ERROR';
+    
+    // 에이전트 통계 업데이트
+    await updateAgentStats(
+      agentId,
+      agentIP || null,
+      browser || 'unknown',
+      false, // success
+      false, // rankFound
+      isBlocked,
+      errorType,
+      errorMessage,
+      keyword,
+      productCode
+    );
+
     // 체크 번호 찾기 (실패 로깅용)
     const checkNumQuery = `
       SELECT COALESCE(MAX(
@@ -497,7 +672,7 @@ router.post('/failure', asyncHandler(async (req: Request, res: Response) => {
       checkNumber,
       keyword,
       productCode,
-      'search_error',
+      errorType,
       errorMessage
     ]);
 
@@ -587,6 +762,195 @@ async function updateStatistics(keyword: string, productCode: string): Promise<v
     await pool.query(updateQuery, [minRank, maxRank, avgRank, keyword, productCode]);
   } catch (error) {
     logger.error(`Failed to update statistics for ${keyword}:`, error);
+  }
+}
+
+/**
+ * 연속 3번 0 체크 확인 함수
+ */
+async function checkConsecutiveZeros(keyword: string, productCode: string): Promise<void> {
+  try {
+    const query = `
+      SELECT check_1, check_2, check_3, check_4, check_5,
+             check_6, check_7, check_8, check_9, check_10,
+             completed_at_check
+      FROM v3_keyword_ranking_checks
+      WHERE keyword = $1 
+        AND product_code = $2 
+        AND check_date = CURRENT_DATE
+    `;
+    
+    const result = await pool.query(query, [keyword, productCode]);
+    if (result.rows.length === 0) return;
+    
+    const row = result.rows[0];
+    const checks = [
+      row.check_1, row.check_2, row.check_3, row.check_4, row.check_5,
+      row.check_6, row.check_7, row.check_8, row.check_9, row.check_10
+    ];
+    
+    // 마지막 3개의 체크값 확인
+    let consecutiveZeros = 0;
+    let lastCheckNumber = 0;
+    
+    for (let i = 0; i < checks.length; i++) {
+      if (checks[i] !== null) {
+        lastCheckNumber = i + 1;
+        if (checks[i] === 0) {
+          consecutiveZeros++;
+          if (consecutiveZeros >= 3) {
+            // 이미 완료 처리되었고, 같은 체크 번호에서 완료되었다면 스킵
+            if (row.completed_at_check && row.completed_at_check >= lastCheckNumber) {
+              logger.info('Already completed at same or later check', {
+                keyword,
+                productCode,
+                completedAtCheck: row.completed_at_check,
+                currentCheckNumber: lastCheckNumber
+              });
+              return;
+            }
+            
+            // 연속 3번 0이면 완료 처리
+            const updateQuery = `
+              UPDATE v3_keyword_ranking_checks
+              SET is_completed = TRUE,
+                  completed_at_check = $1
+              WHERE keyword = $2 
+                AND product_code = $3 
+                AND check_date = CURRENT_DATE
+                AND (completed_at_check IS NULL OR completed_at_check < $1)
+            `;
+            
+            await pool.query(updateQuery, [lastCheckNumber, keyword, productCode]);
+            
+            logger.info('Keyword marked as completed due to 3 consecutive zeros', {
+              keyword,
+              productCode,
+              lastCheckNumber,
+              consecutiveZeros
+            });
+            return;
+          }
+        } else {
+          // 0이 아닌 값이면 카운트 리셋
+          consecutiveZeros = 0;
+        }
+      }
+    }
+  } catch (error) {
+    logger.error(`Failed to check consecutive zeros for ${keyword}:`, error);
+  }
+}
+
+/**
+ * Update agent statistics
+ */
+async function updateAgentStats(
+  agentId: string, 
+  agentIP: string | null, 
+  browser: string,
+  success: boolean,
+  rankFound: boolean,
+  isBlocked: boolean = false,
+  errorType: string | null = null,
+  errorMessage: string | null = null,
+  keyword: string | null = null,
+  productCode: string | null = null
+): Promise<void> {
+  try {
+    // 1. Update daily stats
+    const statsQuery = `
+      INSERT INTO v3_agent_stats (agent_id, agent_ip, browser, stat_date, 
+        total_requests, successful_searches, failed_searches, blocked_count, 
+        ranks_found, products_not_found)
+      VALUES ($1, $2, $3, CURRENT_DATE, 1, $4, $5, $6, $7, $8)
+      ON CONFLICT (agent_id, stat_date) 
+      DO UPDATE SET
+        total_requests = v3_agent_stats.total_requests + 1,
+        successful_searches = v3_agent_stats.successful_searches + $4,
+        failed_searches = v3_agent_stats.failed_searches + $5,
+        blocked_count = v3_agent_stats.blocked_count + $6,
+        ranks_found = v3_agent_stats.ranks_found + $7,
+        products_not_found = v3_agent_stats.products_not_found + $8,
+        updated_at = NOW()
+    `;
+    
+    await pool.query(statsQuery, [
+      agentId,
+      agentIP,
+      browser,
+      success ? 1 : 0,
+      !success ? 1 : 0,
+      isBlocked ? 1 : 0,
+      rankFound && success ? 1 : 0,
+      !rankFound && success ? 1 : 0
+    ]);
+
+    // 2. Update agent health
+    const healthQuery = `
+      INSERT INTO v3_agent_health (agent_id, agent_ip, browser, 
+        last_success_at, last_error_at, consecutive_errors, consecutive_blocks,
+        total_lifetime_requests, total_lifetime_blocks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8)
+      ON CONFLICT (agent_id)
+      DO UPDATE SET
+        agent_ip = $2,
+        browser = $3,
+        last_success_at = CASE WHEN $4 IS NOT NULL THEN $4 ELSE v3_agent_health.last_success_at END,
+        last_error_at = CASE WHEN $5 IS NOT NULL THEN $5 ELSE v3_agent_health.last_error_at END,
+        consecutive_errors = CASE 
+          WHEN $4 IS NOT NULL THEN 0 
+          ELSE v3_agent_health.consecutive_errors + 1 
+        END,
+        consecutive_blocks = CASE 
+          WHEN $9 = TRUE THEN v3_agent_health.consecutive_blocks + 1
+          WHEN $4 IS NOT NULL THEN 0
+          ELSE v3_agent_health.consecutive_blocks
+        END,
+        total_lifetime_requests = v3_agent_health.total_lifetime_requests + 1,
+        total_lifetime_blocks = v3_agent_health.total_lifetime_blocks + $8,
+        status = CASE 
+          WHEN $9 = TRUE AND v3_agent_health.consecutive_blocks >= 2 THEN 'BLOCKED'
+          WHEN v3_agent_health.consecutive_errors >= 5 THEN 'WARNING'
+          WHEN $4 IS NOT NULL THEN 'ACTIVE'
+          ELSE v3_agent_health.status
+        END,
+        updated_at = NOW()
+    `;
+    
+    await pool.query(healthQuery, [
+      agentId,
+      agentIP,
+      browser,
+      success ? new Date() : null,
+      !success ? new Date() : null,
+      !success ? 1 : 0,
+      isBlocked ? 1 : 0,
+      isBlocked ? 1 : 0,
+      isBlocked
+    ]);
+
+    // 3. Log errors
+    if (!success && errorType) {
+      const errorQuery = `
+        INSERT INTO v3_agent_errors (agent_id, agent_ip, browser, error_type, 
+          error_message, keyword, product_code)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `;
+      
+      await pool.query(errorQuery, [
+        agentId,
+        agentIP,
+        browser,
+        errorType,
+        errorMessage,
+        keyword,
+        productCode
+      ]);
+    }
+
+  } catch (error) {
+    logger.error('Failed to update agent stats:', error);
   }
 }
 

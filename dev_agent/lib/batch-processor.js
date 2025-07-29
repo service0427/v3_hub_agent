@@ -99,6 +99,7 @@ async function launchBrowser() {
   } else {
     return await chromium.launch({
       headless: config.headless,
+      channel: 'chrome',
       args: ['--disable-blink-features=AutomationControlled'],
       timeout: 60000
     });

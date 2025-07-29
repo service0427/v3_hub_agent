@@ -2,25 +2,18 @@ require('dotenv').config();
 const { firefox } = require('playwright');
 const winston = require('winston');
 const path = require('path');
+const readline = require('readline');
 
 // Configuration
 const config = {
   agentId: process.env.AGENT_ID || 'nightly-test',
   testKeywords: [
-    '무선이어폰',
-    '노트북',
-    '스마트워치',
-    '블루투스스피커',
-    '휴대용충전기'
+    '무선이어폰'
   ],
   testProductCodes: [
-    '123456789',
-    '987654321', 
-    '555666777',
-    '111222333',
-    '999888777'
+    '123456789'
   ],
-  headless: false, // GUI 모드 필수
+  headless: false, // Linux 서버환경에서는 headless 필수
   logLevel: 'info',
   maxPages: 3,
   delayBetweenRequests: 1000, // 1초 대기 (빠른 테스트)
@@ -46,18 +39,87 @@ const logger = winston.createLogger({
   ]
 });
 
+// 사용자 입력 대기 함수
+async function waitForUserInput(message = "Press Enter to close or wait 30 seconds...") {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  return new Promise((resolve) => {
+    logger.info(`\n⏸️  ${message}`);
+    
+    // 30초 타이머
+    const timer = setTimeout(() => {
+      logger.info('⏱️  30 seconds elapsed, closing automatically...');
+      rl.close();
+      resolve();
+    }, 30000);
+
+    // Enter 키 입력 대기
+    rl.on('line', () => {
+      clearTimeout(timer);
+      rl.close();
+      resolve();
+    });
+
+    // Ctrl+C 처리
+    process.on('SIGINT', () => {
+      clearTimeout(timer);
+      rl.close();
+      resolve();
+    });
+  });
+}
+
 // Firefox Nightly 검색 테스트
 async function testSearch(page, keyword, productCode) {
   try {
     logger.info(`🔍 Testing search: ${keyword} (${productCode})`);
     
+    // 네트워크 에러 감지 리스너 (주요 문서 요청만 감지)
+    let mainRequestFailed = false;
+    page.on('requestfailed', request => {
+      // NS_BINDING_ABORTED는 리소스 취소로 무시
+      const failure = request.failure();
+      if (failure && 
+          !failure.errorText.includes('NS_BINDING_ABORTED') && 
+          request.resourceType() === 'document') {
+        if (!mainRequestFailed) { // 중복 방지
+          mainRequestFailed = true;
+          logger.error(`🚨 NETWORK ERROR DETECTED: ${failure.errorText}`);
+          logger.error(`🛑 BLOCKING DETECTED - Waiting for user input...`);
+          waitForUserInput("Network error detected. Press Enter to close or wait 30 seconds...").then(() => {
+            process.exit(1);
+          });
+        }
+      }
+    });
+    
+    // 응답 에러 감지 리스너 (주요 문서만)
+    let mainResponseFailed = false;
+    page.on('response', response => {
+      if (response.status() >= 400 && 
+          response.request().resourceType() === 'document') {
+        if (!mainResponseFailed) { // 중복 방지
+          mainResponseFailed = true;
+          logger.error(`🚨 HTTP ERROR DETECTED: ${response.status()} ${response.statusText()}`);
+          logger.error(`🛑 BLOCKING DETECTED - Waiting for user input...`);
+          waitForUserInput("HTTP error detected. Press Enter to close or wait 30 seconds...").then(() => {
+            process.exit(1);
+          });
+        }
+      }
+    });
+    
     const searchUrl = `https://www.coupang.com/np/search?q=${encodeURIComponent(keyword)}&channel=user&failRedirectApp=true&page=1&listSize=72`;
     
     logger.info(`📍 Navigating to: ${searchUrl}`);
     
-    // 페이지 이동 (10초 타임아웃으로 단축)
+    // 검색 페이지로 이동
+    logger.info('🔍 Now navigating to search page...');
     await page.goto(searchUrl, { 
-      timeout: 10000,
+      timeout: 30000,
       waitUntil: 'domcontentloaded' 
     });
     
@@ -68,16 +130,18 @@ async function testSearch(page, keyword, productCode) {
     const quickBlock = await quickBlockCheck(page);
     if (quickBlock.blocked) {
       logger.error(`🚨 QUICK BLOCK DETECTED: ${quickBlock.reason}`);
-      logger.error(`🛑 TERMINATING TEST IMMEDIATELY`);
-      process.exit(1); // 즉시 종료
+      logger.error(`🛑 BLOCKING DETECTED - Waiting for user input...`);
+      await waitForUserInput("Quick block detected. Press Enter to close or wait 30 seconds...");
+      process.exit(1);
     }
     
     // 2차 상세 차단 체크
     const isBlocked = await checkIfBlocked(page);
     if (isBlocked.blocked) {
       logger.error(`❌ BLOCKED: ${isBlocked.reason}`);
-      logger.error(`🛑 TERMINATING TEST`);
-      process.exit(1); // 즉시 종료
+      logger.error(`🛑 BLOCKING DETECTED - Waiting for user input...`);
+      await waitForUserInput("Blocking detected. Press Enter to close or wait 30 seconds...");
+      process.exit(1);
     }
     
     // 검색 결과 확인
@@ -94,12 +158,24 @@ async function testSearch(page, keyword, productCode) {
   } catch (error) {
     logger.error(`❌ Search failed: ${error.message}`);
     
-    // 타임아웃이나 연결 오류도 차단 신호일 수 있음
-    if (error.message.includes('timeout') || 
-        error.message.includes('net::') || 
-        error.message.includes('Navigation')) {
-      logger.error(`🚨 NETWORK/TIMEOUT ERROR - POSSIBLE BLOCK`);
-      logger.error(`🛑 TERMINATING TEST DUE TO POSSIBLE BLOCKING`);
+    // 모든 타임아웃, 연결 오류, 셀렉터 대기 실패를 차단 신호로 간주
+    const blockingKeywords = [
+      'timeout', 'Timeout', 'TIMEOUT',
+      'net::', 'Navigation', 'navigation',
+      'waitForSelector', 'waiting for selector',
+      'connection', 'Connection', 'CONNECTION',
+      'refused', 'Refused', 'REFUSED',
+      'failed', 'Failed', 'FAILED'
+    ];
+    
+    const isBlockingError = blockingKeywords.some(keyword => 
+      error.message.includes(keyword)
+    );
+    
+    if (isBlockingError) {
+      logger.error(`🚨 BLOCKING ERROR DETECTED: ${error.message}`);
+      logger.error(`🛑 BLOCKING DETECTED - Waiting for user input...`);
+      await waitForUserInput("Blocking error detected. Press Enter to close or wait 30 seconds...");
       process.exit(1);
     }
     
@@ -226,8 +302,18 @@ async function analyzeSearchResults(page, keyword, productCode) {
       return { hasResults: false, productCount: 0 };
     }
     
-    // 상품 목록 확인
-    await page.waitForSelector('#product-list > li[data-id]', { timeout: 8000 });
+    // 상품 목록 확인 - 타임아웃시 차단으로 간주 (30초 대기)
+    try {
+      await page.waitForSelector('#product-list > li[data-id]', { timeout: 30000 });
+    } catch (waitError) {
+      if (waitError.message.includes('Timeout') || waitError.message.includes('timeout')) {
+        logger.error(`🚨 SELECTOR TIMEOUT - POSSIBLE BLOCK: ${waitError.message}`);
+        logger.error(`🛑 BLOCKING DETECTED - Waiting for user input...`);
+        await waitForUserInput("Selector timeout detected. Press Enter to close or wait 30 seconds...");
+        process.exit(1);
+      }
+      throw waitError; // 다른 에러는 재던지기
+    }
     
     const products = await page.$$('#product-list > li[data-id]');
     const productCount = products.length;
@@ -265,7 +351,7 @@ async function analyzeSearchResults(page, keyword, productCode) {
 
 // 메인 테스트 함수
 async function runNightlyTest() {
-  logger.info('🚀 === Firefox Nightly Test Started ===');
+  logger.info('🚀 === Firefox Test Started ===');
   logger.info(`Agent ID: ${config.agentId}`);
   logger.info(`Test Keywords: ${config.testKeywords.length}`);
   
@@ -273,16 +359,40 @@ async function runNightlyTest() {
   const results = [];
   
   try {
-    // Firefox 실행 (Nightly 버전 포함)
-    logger.info('🔥 Launching Firefox...');
-    browser = await firefox.launch({
-      headless: config.headless,
-      // channel 옵션 제거 - Playwright가 시스템의 Firefox 사용
-      args: [
-        '--no-sandbox',
-        '--disable-dev-shm-usage'
-      ]
-    });
+    // Firefox 실행 옵션 선택
+    const firefoxOption = process.env.FIREFOX_OPTION || 'playwright'; // playwright, profile, cdp
+    
+    if (firefoxOption === 'profile') {
+      // 실제 Firefox 프로필 사용
+      logger.info('🔥 Launching Firefox with real user profile...');
+      const profilePath = '/home/tech/.mozilla/firefox/29xo4urx.default-default-1';
+      browser = await firefox.launchPersistentContext(profilePath, {
+        headless: config.headless,
+        firefoxUserPrefs: {
+          'dom.webdriver.enabled': false
+        }
+      });
+    } else if (firefoxOption === 'cdp') {
+      // CDP (Chrome DevTools Protocol) 모드로 연결
+      logger.info('🔥 Launching Firefox with CDP...');
+      browser = await firefox.launch({
+        headless: config.headless,
+        args: ['--remote-debugging-port=9222'],
+        firefoxUserPrefs: {
+          'dom.webdriver.enabled': false
+        }
+      });
+    } else {
+      // 기본 Playwright Firefox
+      logger.info('🔥 Launching Firefox (Playwright bundle)...');
+      browser = await firefox.launch({
+        headless: config.headless,
+        firefoxUserPrefs: {
+          'dom.webdriver.enabled': false,
+          'marionette.enabled': false
+        }
+      });
+    }
     
     logger.info('✅ Firefox launched successfully');
     
@@ -293,11 +403,28 @@ async function runNightlyTest() {
       
       logger.info(`\n--- Test ${i + 1}/${config.testKeywords.length} ---`);
       
-      const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0'
-      });
+      let context, page;
       
-      const page = await context.newPage();
+      if (process.env.FIREFOX_OPTION === 'profile') {
+        // launchPersistentContext는 이미 context를 반환
+        context = browser;
+        page = await context.newPage();
+      } else {
+        // 일반적인 경우
+        context = await browser.newContext({
+          locale: 'ko-KR',
+          timezoneId: 'Asia/Seoul'
+        });
+        page = await context.newPage();
+      }
+      
+      // navigator.webdriver를 false로 덮어쓰기
+      await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+          configurable: true
+        });
+      });
       
       try {
         const result = await testSearch(page, keyword, productCode);
@@ -341,7 +468,8 @@ async function runNightlyTest() {
         error.message.includes('connect') ||
         error.message.includes('browser')) {
       logger.error(`🚨 BROWSER LAUNCH FAILED - POSSIBLE SYSTEM BLOCK`);
-      logger.error(`🛑 TERMINATING TEST`);
+      logger.error(`🛑 ERROR DETECTED - Waiting for user input...`);
+      await waitForUserInput("Browser launch failed. Press Enter to close or wait 30 seconds...");
       process.exit(1);
     }
   } finally {

@@ -9,7 +9,11 @@ const apiClient = axios.create({
   headers: {
     'User-Agent': 'V3-Agent/1.0',
     'Content-Type': 'application/json'
-  }
+  },
+  // SSL 인증서 검증 (자체 서명 인증서 허용)
+  httpsAgent: new (require('https').Agent)({
+    rejectUnauthorized: false
+  })
 });
 
 // Get keywords from API

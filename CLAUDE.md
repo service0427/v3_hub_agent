@@ -14,9 +14,9 @@ ParserHub V3는 **쿠팡 전용 실시간 제품 순위 조회 서비스**입니
   - Linux: Chrome, Firefox, Firefox Nightly 지원
   - Windows: Chrome, Firefox, Edge 지원
 - **실시간 조회**: 캐시 없이 에이전트 직접 크롤링
-- **과금 시스템**: keyword+code 조합별 일일 30원 과금
 - **V2 격리**: 기존 V2 시스템과 완전히 분리된 환경에서 동작
 - **단순 롤링**: 쿨다운 없이 모든 에이전트 순차 사용
+- **무제한 사용**: API 호출량 제한 없음
 
 ## 🏗️ 시스템 아키텍처
 
@@ -35,8 +35,8 @@ ParserHub V3는 **쿠팡 전용 실시간 제품 순위 조회 서비스**입니
                        │   PostgreSQL     │    │ └─────────────────┘ │
                        │                  │    └─────────────────────┘
                        │ - v3_api_keys    │
-                       │ - v3_history     │
-                       │ - v3_billing     │
+                       │ - v3_keyword_list │
+                       │ - v3_ranking_checks│
                        └──────────────────┘
 ```
 
@@ -61,15 +61,15 @@ v3_hub_agent/
 │   │   │   ├── connection.ts     # PostgreSQL 연결
 │   │   │   └── models/
 │   │   │       ├── ApiKey.ts     # v3_api_keys 모델
-│   │   │       ├── BillingUsage.ts # v3_coupang_billing_usage
-│   │   │       ├── RankingHistory.ts # v3_coupang_ranking_history
+│   │   │       ├── KeywordList.ts # v3_keyword_list 모델
+│   │   │       ├── RankingChecks.ts # v3_keyword_ranking_checks 모델
 │   │   │       └── index.ts      # 모델 내보내기
 │   │   ├── middleware/
 │   │   │   ├── auth.ts           # API 키 인증
 │   │   │   ├── errorHandler.ts   # 에러 처리
 │   │   │   └── logger.ts         # HTTP 로깅
 │   │   ├── services/
-│   │   │   └── billing.ts        # 과금 비즈니스 로직
+│   │   │   └── ranking.ts        # 순위 조회 비즈니스 로직
 │   │   ├── types/
 │   │   │   └── index.ts          # TypeScript 타입 정의
 │   │   └── utils/
@@ -80,9 +80,15 @@ v3_hub_agent/
 │   ├── deploy.sh                 # PM2 배포 스크립트
 │   ├── package.json
 │   └── tsconfig.json
-├── agent/                        # 윈도우 VM 에이전트 (개발 예정)
-│   ├── package.json
-│   └── src/                      # 아직 미구현
+├── agent/                        # 윈도우 VM 에이전트 (현재 미사용)
+│   └── (dev_agent 개발 완료 후 사용 예정)
+├── dev_agent/                    # 개발용 에이전트 (사용 중)
+│   ├── run-continuous-stats.sh   # 연속 실행 + 통계 모니터링
+│   ├── batch-check-api-simple.js # 간결한 API 체크
+│   ├── package.json              # 의존성 관리
+│   ├── README.md                 # 사용 가이드
+│   ├── logs/                     # 실행 로그
+│   └── _archived/                # 이전 개발 파일들
 ├── docs/                         # 프로젝트 문서
 │   ├── QUICK_START.md            # 빠른 시작 가이드
 │   ├── DATABASE_INFO.md          # DB 연결 정보
@@ -107,41 +113,13 @@ GET https://u24.techb.kr/v3/api/coupang?keyword={keyword}&code={code}&pages={pag
 
 ## 💾 데이터베이스 스키마
 
-### 과금용 테이블
-```sql
--- 과금용 키워드+코드 조합 사용량 (일일 중복 제거)
-CREATE TABLE v3_coupang_billing_usage (
-    id SERIAL PRIMARY KEY,
-    api_key VARCHAR(255) NOT NULL,
-    keyword VARCHAR(500) NOT NULL,
-    product_code VARCHAR(255) NOT NULL,
-    date DATE NOT NULL,
-    billing_amount INTEGER DEFAULT 30, -- 30원 고정
-    request_count INTEGER DEFAULT 1,
-    success_count INTEGER DEFAULT 0,
-    
-    UNIQUE KEY unique_daily_billing (api_key, keyword, product_code, date)
-);
-```
-
-## 💰 과금 시스템
-
-### 과금 정책
-- **일일 중복 제거**: 같은 keyword+code 조합은 하루 1회만 과금
-- **고정 요금**: 조합당 30원
-- **제한 없음**: API 사용량 제한 없음
-
-### 과금 처리 로직
-```
-요청 발생 시:
-1. keyword + code + api_key + 오늘 날짜로 조회
-2. 기존 레코드 있음: request_count만 증가 (과금 없음)
-3. 기존 레코드 없음: 새 레코드 생성 (30원 과금)
-
-월말 정산:
-- 각 API 키별 unique_queries 카운트
-- 총 과금액 = unique_queries × 30원
-```
+### 주요 테이블
+- **v3_api_keys**: API 키 관리
+- **v3_keyword_list**: 검색 키워드 및 상품 정보
+- **v3_keyword_ranking_checks**: 순위 체크 결과 (10분 간격 최대 10회)
+- **v3_agent_stats**: 에이전트 일별 통계
+- **v3_agent_errors**: 에이전트 에러 로그
+- **v3_agent_health**: 에이전트 상태 모니터링
 
 ## 🚨 에이전트 실행 정책
 - **절대 headless 모드로 작동하지 않음**
@@ -149,6 +127,12 @@ CREATE TABLE v3_coupang_billing_usage (
 - **에이전트는 GUI 환경에서만 실행 가능**
 - **HEADLESS=false 설정 필수**
 - **원격 서버에서는 사용자가 직접 GUI 모드로 실행**
+
+### 현재 사용 중인 에이전트
+- **dev_agent**: 개발/테스트용 에이전트
+  - `run-continuous-stats.sh`: 실시간 통계와 함께 연속 실행
+  - Hub API와 통신하여 키워드 순위 체크
+  - 차단 감지 및 자동 대기 시간 조정
 
 ## 🔧 개발 환경 설정
 
@@ -161,7 +145,7 @@ psql -h mkt.techb.kr -U techb_pp -d productparser_db
 \i scripts/init-db.sql
 
 # 3. 연결 확인
-SELECT * FROM v3_api_keys;
+SELECT * FROM v3_keyword_list;
 ```
 
 **운영 DB 접속 정보**:
@@ -217,16 +201,16 @@ docker-compose up -d
 ## 🔐 보안 고려사항
 
 - API 키 기반 인증
-- 과금 데이터 영구 보존
 - 브라우저별 차단 관리
 - 로그 데이터 보안
+- PostgreSQL 단일 DB 사용
 
 ## 📞 문제 해결
 
 ### 일반적인 문제
 1. **에이전트 연결 안됨**: 방화벽 설정 확인
 2. **브라우저 차단**: 다른 브라우저로 자동 전환
-3. **과금 중복**: 일일 중복 제거 로직으로 방지
+3. **순위 조회 실패**: 연속 3회 실패 시 자동 중단
 
 ### 로그 확인
 ```bash
@@ -261,6 +245,12 @@ tail -f agent/logs/agent.log
 - **주석 최소화**: 코드 자체가 설명이 되도록 작성
 - **타입 안전성**: TypeScript의 타입 시스템 적극 활용
 - **에러 처리**: 모든 에러는 적절히 처리하고 로깅
+
+### 데이터 정책
+- **순위 체크 제한**: 10분 간격으로 최대 10회 체크
+- **자동 중단**: 연속 3회 순위 0일 경우 자동 중단
+- **재시작 가능**: 수동으로 is_completed=FALSE 설정 시 재시작
+- **단일 DB 사용**: PostgreSQL만 사용 (MySQL 분리)
 
 ---
 

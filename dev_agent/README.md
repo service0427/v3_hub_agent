@@ -1,84 +1,111 @@
-# ParserHub V3 개발용 에이전트
+# V3 Dev Agent - 연속 실행 통계 모니터링
 
-소켓 연결 없이 로컬에서 브라우저 GUI를 직접 테스트하기 위한 개발용 에이전트입니다.
+쿠팡 키워드 순위를 지속적으로 체크하며 실시간 통계를 제공하는 개발용 에이전트입니다.
 
-## 목적
+## 🚀 빠른 시작
 
-- V3 에이전트의 GUI 표시 문제를 디버깅
-- 브라우저별 실행 옵션 테스트
-- 소켓 통신 없이 순수 브라우저 제어 테스트
-
-## 사용 방법
-
-### 1. 자동 실행 (권장)
 ```bash
+# 실행
 ./run.sh
+
+# 중단: Ctrl+C
 ```
 
-### 2. 수동 실행
+## 📊 주요 기능
 
-#### Chrome 테스트
+### 실시간 통계 모니터링
+- **누적 통계**: 성공, 실패, 차단, 키워드 없음 건수
+- **성공률**: 실시간 성공률 계산
+- **경과 시간**: 세션 시작 후 경과 시간
+- **자동 간격 조정**: 상태에 따라 대기 시간 자동 조정
+
+### 대기 시간 정책
+- **성공 시**: 5초 대기
+- **키워드 없음**: 60초 시작, 최대 605초까지 증가
+- **실패/차단**: 60초 시작, 최대 600초까지 증가
+
+## 🔧 환경 설정
+
+### 필수 환경 변수
 ```bash
-npm install
-export DISPLAY=:0
-BROWSER_TYPE=chrome node src/index.js
+# .env 파일에 설정
+HUB_API_URL=http://localhost:3331  # Hub API 주소
+BROWSER=chrome                      # 브라우저 (chrome/firefox)
+BATCH_MAX_PAGES=5                   # 최대 검색 페이지 수
+LOG_LEVEL=info                      # 로그 레벨
 ```
 
-#### Firefox 테스트
+### 브라우저 설정
+- **Chrome** (기본값): 안정적이고 빠른 실행
+- **Firefox**: 차단 우회에 유리할 수 있음
+
+## 📁 디렉토리 구조
+
+```
+dev_agent/
+├── run.sh                       # 메인 실행 스크립트
+├── check.js                     # API 체크 스크립트
+├── package.json                 # 의존성 관리
+├── .env                         # 환경 설정
+├── logs/                        # 실행 로그
+│   └── batch-check-api-*.log
+├── data/                        # 브라우저 데이터
+├── _backup/                     # 백업 파일들
+└── _archived/                   # 이전 버전 파일들
+```
+
+## 📈 통계 화면 예시
+
+```
+📊 ============== 세션 누적 통계 ==============
+🕐 시작 시간: 2025-07-29 14:30:00
+⏱️  경과 시간: 01:23:45
+🔄 전체 실행: 120회
+
+✅ 성공: 95
+❌ 실패: 5
+🚫 차단: 2
+📭 키워드 없음: 18
+
+📈 성공률: 92.2%
+🔍 전체 시도: 102
+=============================================
+```
+
+## 🛠️ 문제 해결
+
+### 차단 발생 시
+- 자동으로 대기 시간이 증가하여 재시도
+- Firefox 브라우저로 변경 시도
+- 프록시 설정 검토
+
+### 키워드 없음이 계속될 때
+- Hub API의 키워드 큐 확인
+- PostgreSQL v3_keyword_list 테이블 확인
+- 동기화 스크립트 실행 상태 확인
+
+### 로그 확인
 ```bash
-BROWSER_TYPE=firefox node src/index.js
+# 실시간 로그
+tail -f logs/batch-check-api-*.log
+
+# 오늘 로그 보기
+cat logs/batch-check-api-$(date +%Y-%m-%d).log
 ```
 
-#### Edge 테스트
-```bash
-BROWSER_TYPE=edge node src/index.js
-```
+## 🔗 관련 시스템
 
-## 환경 설정
+- **Hub API**: 키워드 제공 및 결과 저장
+- **PostgreSQL**: v3_keyword_ranking_checks 테이블
+- **MySQL 동기화**: 10분마다 결과 동기화
 
-`.env` 파일에서 다음 설정을 변경할 수 있습니다:
+## ⚠️ 주의사항
 
-- `BROWSER_TYPE`: 브라우저 종류 (chrome/firefox/edge)
-- `HEADLESS`: GUI 표시 여부 (false 권장)
-- `WINDOW_WIDTH/HEIGHT`: 브라우저 창 크기
-- `WINDOW_X/Y`: 브라우저 창 위치
-- `TEST_URL`: 테스트할 URL
-- `TEST_KEYWORD`: 검색 테스트 키워드
+- GUI 모드로만 실행 (headless: false)
+- 한 번에 1개 키워드만 처리
+- 차단 감지 시 자동으로 긴 대기 시간 적용
+- 로그 파일은 일별로 자동 생성
 
-## 주요 기능
+---
 
-1. **GUI 표시 확인**: 브라우저가 화면에 실제로 표시되는지 확인
-2. **창 위치/크기 제어**: 지정된 위치와 크기로 브라우저 창 열기
-3. **스크린샷 캡처**: logs 폴더에 스크린샷 저장
-4. **검색 테스트**: 쿠팡 검색 기능 테스트
-
-## 문제 해결
-
-### GUI가 표시되지 않을 때
-
-1. DISPLAY 환경변수 확인:
-```bash
-echo $DISPLAY
-# 없으면 설정:
-export DISPLAY=:0
-```
-
-2. X11 서버 실행 확인:
-```bash
-ps aux | grep X
-```
-
-3. 브라우저 설치 확인:
-```bash
-which google-chrome
-which firefox
-```
-
-## 로그 및 스크린샷
-
-- 콘솔에 실시간 로그 출력
-- `logs/` 폴더에 스크린샷 저장
-
-## V2와의 차이점 분석
-
-이 개발 에이전트를 통해 V2와 V3의 브라우저 실행 방식 차이를 분석하고, GUI 표시 문제를 해결할 수 있습니다.
+개발 환경: Node.js 16+, Playwright, Winston

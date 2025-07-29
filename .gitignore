@@ -12,7 +12,7 @@ build/
 .env
 .env.local
 .env.development
-.env.production
+dev_agent/.env
 
 # Logs
 logs/
@@ -75,6 +75,9 @@ docker-compose.override.yml
 *.backup
 *.bak
 *.tmp
+
+# Archived files
+scripts/_archived/
 
 # Database
 *.sqlite

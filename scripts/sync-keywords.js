@@ -1,7 +1,51 @@
+/**
+ * sync-keywords.js - MySQL → PostgreSQL 키워드 동기화
+ * 
+ * 📋 주요 기능:
+ * - MySQL ad_slots에서 활성 키워드를 PostgreSQL v3_keyword_list로 동기화
+ * - 10분마다 크론탭으로 실행
+ * - 시간대별 체크 조건에 따라 현재 시간에 해당하는 키워드만 처리
+ * 
+ * 🗄️ 데이터베이스:
+ * - MySQL (소스): 138.2.125.63 / magic_dev / !magic00 / magic_db
+ * - PostgreSQL (타겟): mkt.techb.kr / techb_pp / Tech1324! / productparser_db
+ * 
+ * 📊 주요 테이블:
+ * - MySQL: ad_slots (edit_main_keyword, product_id, product_name, product_url, product_thumbnail)
+ * - PostgreSQL: v3_keyword_list (keyword, product_code, product_name, product_url, thumbnail_url, is_active, last_sync_at)
+ * 
+ * 🔄 동기화 로직:
+ * 1. MySQL에서 현재 시간에 활성화된 키워드 조회 (hourly_N = 1 AND hour_N = 현재시간)
+ * 2. PostgreSQL 기존 데이터와 비교
+ * 3. INSERT (새 키워드), UPDATE (기존 키워드), DEACTIVATE (MySQL에 없는 키워드)
+ * 
+ * 📝 로그:
+ * - 일반: logs/sync-keywords-{날짜}.log
+ * - 크론: logs/sync-keywords-cron.log
+ * 
+ * 🔧 실행:
+ * node scripts/sync-keywords.js
+ * 
+ * ⚠️ 주의:
+ * - product_id (MySQL) = product_code (PostgreSQL)
+ * - 비활성화는 하지만 삭제는 하지 않음 (데이터 보존)
+ * - last_sync_at은 batch API에서 60분 이내 체크용으로 사용
+ * 
+ * 📚 상세 문서: /home/tech/v3_hub_agent/docs/SYNC_KEYWORDS_GUIDE.md
+ */
+
 const mysql = require('mysql2/promise');
 const { Pool } = require('pg');
 const winston = require('winston');
 const path = require('path');
+
+// Logger setup
+// 환경변수 설정 (run-sync.sh에서 가져옴)
+process.env.DB_HOST = process.env.DB_HOST || 'mkt.techb.kr';
+process.env.DB_PORT = process.env.DB_PORT || '5432';
+process.env.DB_NAME = process.env.DB_NAME || 'productparser_db';
+process.env.DB_USER = process.env.DB_USER || 'techb_pp';
+process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'Tech1324!';
 
 // Logger setup
 const logger = winston.createLogger({
@@ -207,8 +251,15 @@ async function syncKeywords() {
 
 // Run sync if called directly
 if (require.main === module) {
+  // 시작 메시지 출력 (run-sync.sh에서 가져옴)
+  console.log('=== V3 Keyword Sync ===');
+  console.log(`Time: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`);
+  console.log('');
+  
   syncKeywords()
     .then(() => {
+      console.log('');
+      console.log('=== Sync completed ===');
       logger.info('✅ Sync process completed');
       process.exit(0);
     })

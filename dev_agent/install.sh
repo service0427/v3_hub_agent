@@ -56,15 +56,24 @@ npm install
 # .env 파일 생성
 if [ ! -f .env ]; then
     echo -e "${BLUE}🔧 환경 설정 파일 생성 중...${NC}"
-    cat > .env << EOF
+    
+    # 프로덕션 환경 파일 복사
+    if [ -f .env.production ]; then
+        cp .env.production .env
+    else
+        cat > .env << EOF
 # V3 Agent Configuration
 HUB_API_URL=https://u24.techb.kr:3331
 BROWSER=chrome
 LOG_LEVEL=info
-
-# Agent identification (자동 생성됨)
-AGENT_ID=agent-$(hostname)-$(date +%s)
 EOF
+    fi
+    
+    # Agent ID 자동 생성 및 추가
+    echo "" >> .env
+    echo "# Agent identification (자동 생성됨)" >> .env
+    echo "AGENT_ID=agent-$(hostname)-$(date +%s)" >> .env
+    
     echo -e "${GREEN}✅ .env 파일이 생성되었습니다.${NC}"
 fi
 
