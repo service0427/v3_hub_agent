@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # V3 Batch Check Continuous Runner with Statistics
 # 누적 통계 기능이 추가된 지속적 배치 실행 스크립트
@@ -26,16 +26,27 @@ run_count=0
 
 # DB에서 설정 가져오기 함수
 fetch_config_from_db() {
+    # 배열이 선언되지 않았다면 다시 선언
+    if ! declare -p config_cache &>/dev/null; then
+        declare -gA config_cache
+    fi
+    
     echo -e "${CYAN}📋 DB에서 설정을 가져오는 중...${NC}"
     
     # psql로 설정 조회
-    local query="SELECT config_key, config_value FROM v3_agent_config"
+    local query="SELECT config_key, config_value FROM v3_agent_config WHERE config_key IS NOT NULL AND config_value IS NOT NULL"
     local result=$(PGPASSWORD=$PGPASSWORD psql -h $PGHOST -p $PGPORT -U $PGUSER -d $PGDATABASE -t -A -F"|" -c "$query" 2>/dev/null)
     
     if [ $? -eq 0 ]; then
         # 설정 파싱 및 저장
         while IFS='|' read -r key value; do
-            config_cache["$key"]="$value"
+            # 공백 제거 및 유효성 검사
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            
+            if [ -n "$key" ] && [ -n "$value" ]; then
+                config_cache["$key"]="$value"
+            fi
         done <<< "$result"
         
         echo -e "${GREEN}✅ DB 설정 로드 완료${NC}"
@@ -52,8 +63,8 @@ get_config() {
     local key=$1
     local default_value=$2
     
-    # 캐시에서 값 가져오기
-    if [ -n "${config_cache[$key]}" ]; then
+    # 배열 존재 및 키 존재 확인
+    if declare -p config_cache &>/dev/null && [ -n "${config_cache[$key]+x}" ]; then
         echo "${config_cache[$key]}"
     else
         echo "$default_value"
@@ -182,8 +193,8 @@ while true; do
         apply_config
     fi
     
-    # 통계 먼저 표시
-    show_stats
+    # 통계 먼저 표시 (오류 무시)
+    show_stats 2>/dev/null || echo -e "${YELLOW}⚠️ 통계 표시 중 오류 (무시됨)${NC}"
     
     echo ""
     echo "========================================="
