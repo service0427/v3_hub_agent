@@ -94,7 +94,7 @@ async function processBatch(browser, keywords, stats) {
 async function launchBrowser() {
   return await chromium.launch({
     headless: config.headless,
-    channel: 'chrome',
+    // channel: 'chrome',
     args: ['--disable-blink-features=AutomationControlled'],
     timeout: 60000
   });

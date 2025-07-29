@@ -1,6 +1,6 @@
 // 모듈 import
 const logger = require('./lib/logger');
-const { getAgentIP, getScreenName, getAgentName } = require('./lib/system-info');
+const { getAgentIP, getScreenName, getAgentName, getUniqueAgentId } = require('./lib/system-info');
 const { config, getConfig, incrementRunCount, closePgPool, getRunCount, getConfigFetchCount } = require('./lib/config');
 const { getKeywordsFromAPI } = require('./lib/api-client');
 const { processBatch, launchBrowser } = require('./lib/batch-processor');
@@ -13,6 +13,12 @@ async function main() {
   config.agentIP = await getAgentIP();
   config.screenName = await getScreenName();
   config.agentName = await getAgentName();
+  
+  // 고유 Agent ID 설정 (.env에서 읽거나 자동 생성)
+  if (!config.agentId || config.agentId.startsWith('agent-17')) {
+    config.agentId = await getUniqueAgentId();
+    logger.info(`Generated unique Agent ID: ${config.agentId}`);
+  }
   
   // DB에서 설정 가져오기
   await getConfig();
