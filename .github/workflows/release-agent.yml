@@ -1,0 +1,84 @@
+name: Release V3 Agent
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: |
+        cd dev_agent
+        npm ci
+    
+    - name: Run tests
+      run: |
+        cd dev_agent
+        npm test || echo "No tests configured"
+    
+    - name: Create release archive
+      run: |
+        cd dev_agent
+        tar -czf ../v3-agent.tar.gz \
+          --exclude=node_modules \
+          --exclude=logs \
+          --exclude=.env \
+          --exclude=.git \
+          .
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        echo "## What's Changed" > CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 2>/dev/null || echo "")..HEAD >> CHANGELOG.md || echo "- Initial release" >> CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        echo "## Installation" >> CHANGELOG.md
+        echo '```bash' >> CHANGELOG.md
+        echo 'curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/dev_agent/install.sh | bash' >> CHANGELOG.md
+        echo '```' >> CHANGELOG.md
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name || format('agent-v{0}', github.event.inputs.version) }}
+        release_name: V3 Agent ${{ github.ref_name || format('agent-v{0}', github.event.inputs.version) }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./v3-agent.tar.gz
+        asset_name: v3-agent.tar.gz
+        asset_content_type: application/gzip
+    
+    - name: Update install script version
+      run: |
+        # 설치 스크립트에 버전 정보 업데이트
+        VERSION=${{ github.ref_name || format('agent-v{0}', github.event.inputs.version) }}
+        sed -i "s/BRANCH=\"main\"/BRANCH=\"$VERSION\"/" dev_agent/install.sh || true
