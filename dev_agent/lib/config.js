@@ -5,7 +5,7 @@ const { Pool } = require('pg');
 const config = {
   hubApiUrl: process.env.HUB_API_URL || 'http://localhost:3331',
   agentId: process.env.AGENT_ID || `agent-${Date.now()}`,
-  browser: process.env.BROWSER || 'chrome',
+  browser: 'chrome',  // 항상 chrome으로 고정
   maxKeywords: parseInt(process.argv[2] || '2'),
   maxPages: parseInt(process.env.BATCH_MAX_PAGES || '5'),
   batchSize: parseInt(process.env.BATCH_SIZE || '10'),
@@ -48,7 +48,7 @@ async function fetchConfigFromDB() {
     
     // 설정 적용
     if (dbConfig.hub_api_url) config.hubApiUrl = dbConfig.hub_api_url;
-    if (dbConfig.browser) config.browser = dbConfig.browser;
+    // browser 설정 제거 - 항상 chrome 사용
     if (dbConfig.max_pages) config.maxPages = parseInt(dbConfig.max_pages);
     if (dbConfig.batch_size) config.batchSize = parseInt(dbConfig.batch_size);
     if (dbConfig.batch_delay) config.delayBetweenBatches = parseInt(dbConfig.batch_delay);

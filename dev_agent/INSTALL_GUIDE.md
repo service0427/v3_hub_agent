@@ -110,10 +110,9 @@ rm -f ~/.local/bin/v3-agent
 
 ```env
 # Hub API 주소
-HUB_API_URL=https://u24.techb.kr:3331
+HUB_API_URL=http://u24.techb.kr:3331
 
-# 브라우저 선택 (chrome/firefox)
-BROWSER=chrome
+# Chrome only (Firefox support removed)
 
 # 로그 레벨 (debug/info/warn/error)
 LOG_LEVEL=info

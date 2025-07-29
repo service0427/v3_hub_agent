@@ -63,8 +63,8 @@ if [ ! -f .env ]; then
     else
         cat > .env << EOF
 # V3 Agent Configuration
-HUB_API_URL=https://u24.techb.kr:3331
-BROWSER=chrome
+HUB_API_URL=http://u24.techb.kr:3331
+# Chrome only (Firefox support removed)
 LOG_LEVEL=info
 EOF
     fi

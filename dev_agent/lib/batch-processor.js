@@ -1,4 +1,4 @@
-const { chromium, firefox } = require('playwright');
+const { chromium } = require('playwright');
 const logger = require('./logger');
 const { config } = require('./config');
 const { searchKeyword } = require('./crawler');
@@ -92,18 +92,12 @@ async function processBatch(browser, keywords, stats) {
 
 // Launch browser
 async function launchBrowser() {
-  if (config.browser === 'firefox') {
-    return await firefox.launch({
-      headless: config.headless
-    });
-  } else {
-    return await chromium.launch({
-      headless: config.headless,
-      channel: 'chrome',
-      args: ['--disable-blink-features=AutomationControlled'],
-      timeout: 60000
-    });
-  }
+  return await chromium.launch({
+    headless: config.headless,
+    channel: 'chrome',
+    args: ['--disable-blink-features=AutomationControlled'],
+    timeout: 60000
+  });
 }
 
 module.exports = {
