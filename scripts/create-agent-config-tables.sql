@@ -50,22 +50,6 @@ SET config_value = EXCLUDED.config_value,
     description = EXCLUDED.description,
     updated_at = NOW();
 
--- 에이전트 프로필 테이블
-CREATE TABLE IF NOT EXISTS v3_agent_profiles (
-    agent_id VARCHAR(50) PRIMARY KEY,
-    agent_ip VARCHAR(45),
-    browser_priority TEXT[] DEFAULT ARRAY['chrome', 'firefox', 'edge'],
-    custom_config JSONB DEFAULT '{}',
-    is_active BOOLEAN DEFAULT true,
-    last_config_fetch TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 기본 에이전트 프로필 생성
-INSERT INTO v3_agent_profiles (agent_id, browser_priority) VALUES
-('agent-01', ARRAY['chrome', 'firefox', 'edge'])
-ON CONFLICT (agent_id) DO NOTHING;
 
 -- 설정 변경 시 updated_at 자동 갱신 트리거
 CREATE OR REPLACE FUNCTION update_config_timestamp()
@@ -82,11 +66,6 @@ CREATE TRIGGER update_v3_agent_config_timestamp
     FOR EACH ROW
     EXECUTE FUNCTION update_config_timestamp();
 
-DROP TRIGGER IF EXISTS update_v3_agent_profiles_timestamp ON v3_agent_profiles;
-CREATE TRIGGER update_v3_agent_profiles_timestamp
-    BEFORE UPDATE ON v3_agent_profiles
-    FOR EACH ROW
-    EXECUTE FUNCTION update_config_timestamp();
 
 -- 유용한 뷰: 현재 설정 보기
 CREATE OR REPLACE VIEW v3_current_config AS
@@ -106,20 +85,12 @@ ORDER BY
     config_key;
 
 -- 인덱스
-CREATE INDEX IF NOT EXISTS idx_agent_profiles_active ON v3_agent_profiles(is_active);
 CREATE INDEX IF NOT EXISTS idx_agent_config_updated ON v3_agent_config(updated_at);
 
 -- 테이블 코멘트
 COMMENT ON TABLE v3_agent_config IS '에이전트 전역 설정';
-COMMENT ON TABLE v3_agent_profiles IS '에이전트별 프로필 및 커스텀 설정';
 
 -- 컬럼 코멘트
 COMMENT ON COLUMN v3_agent_config.config_key IS '설정 키';
 COMMENT ON COLUMN v3_agent_config.config_value IS '설정 값';
 COMMENT ON COLUMN v3_agent_config.description IS '설정 설명';
-
-COMMENT ON COLUMN v3_agent_profiles.agent_id IS '에이전트 고유 ID';
-COMMENT ON COLUMN v3_agent_profiles.browser_priority IS '브라우저 우선순위 배열';
-COMMENT ON COLUMN v3_agent_profiles.custom_config IS '에이전트별 커스텀 설정 (JSON)';
-COMMENT ON COLUMN v3_agent_profiles.is_active IS '에이전트 활성 상태';
-COMMENT ON COLUMN v3_agent_profiles.last_config_fetch IS '마지막 설정 조회 시간';
