@@ -426,12 +426,14 @@ while true; do
     is_blocked=false
     
     # 차단 감지 (네트워크 에러 포함) - 우선순위 최상위
-    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|net::ERR_|BLOCKED|blocked|차단|Timeout.*exceeded|waitForSelector.*Timeout|chrome-error://|Network/page error|Page error detected|browserType\.launch:|Target.*closed|Navigation failed|Error page detected|Execution context was destroyed)"; then
+    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|net::ERR_|NS_ERROR_NET_INTERRUPT|BLOCKED|blocked|차단|Timeout.*exceeded|waitForSelector.*Timeout|chrome-error://|Network/page error|Page error detected|browserType\.launch:|Target.*closed|Navigation failed|Error page detected|Execution context was destroyed)"; then
         is_blocked=true
         total_blocked=$((total_blocked + 1))
         # 차단 원인 표시
         if echo "$output" | grep -q "ERR_HTTP2_PROTOCOL_ERROR"; then
             block_reason="🔒 ERR_HTTP2_PROTOCOL_ERROR (HTTPS 차단)"
+        elif echo "$output" | grep -q "NS_ERROR_NET_INTERRUPT"; then
+            block_reason="🔒 NS_ERROR_NET_INTERRUPT (Firefox 네트워크 차단)"
         elif echo "$output" | grep -q "Security Challenge"; then
             block_reason="🛡️ Coupang Security Challenge"
         elif echo "$output" | grep -q "Bot Detection"; then
