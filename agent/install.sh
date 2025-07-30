@@ -198,8 +198,15 @@ case "$1" in
         ;;
     update)
         echo "🔄 Agent 업데이트..."
-        git pull
-        npm install
+        if [ -f "./update.sh" ]; then
+            ./update.sh
+        else
+            # 폴백: 기본 업데이트
+            echo "업데이트 스크립트를 다운로드합니다..."
+            curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/agent/update.sh -o update.sh
+            chmod +x update.sh
+            ./update.sh
+        fi
         ;;
     *)
         echo "V3 Agent 명령어"

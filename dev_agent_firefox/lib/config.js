@@ -8,11 +8,9 @@ const config = {
   browser: 'firefox',  // Firefox 전용
   maxKeywords: parseInt(process.argv[2] || '2'),
   maxPages: parseInt(process.env.BATCH_MAX_PAGES || '5'),
-  batchSize: parseInt(process.env.BATCH_SIZE || '10'),
-  delayBetweenBatches: parseInt(process.env.BATCH_DELAY || '5000'),
+  // batchSize, delayBetweenBatches 제거됨 (병렬 처리 미구현)
   headless: false,
-  logLevel: process.env.LOG_LEVEL || 'info',
-  apiTimeout: 20000,
+  // logLevel, apiTimeout 제거됨 (사용 안함)
   agentIP: null,
   screenName: null,
   agentName: null,
@@ -50,11 +48,8 @@ async function fetchConfigFromDB() {
     if (dbConfig.hub_api_url) config.hubApiUrl = dbConfig.hub_api_url;
     // browser 설정 제거 - 항상 firefox 사용
     if (dbConfig.max_pages) config.maxPages = parseInt(dbConfig.max_pages);
-    if (dbConfig.batch_size) config.batchSize = parseInt(dbConfig.batch_size);
-    if (dbConfig.batch_delay) config.delayBetweenBatches = parseInt(dbConfig.batch_delay);
-    if (dbConfig.log_level) config.logLevel = dbConfig.log_level;
-    if (dbConfig.api_timeout) config.apiTimeout = parseInt(dbConfig.api_timeout);
-    if (dbConfig.headless) config.headless = dbConfig.headless === 'true';
+    // batch_size, batch_delay, log_level, api_timeout 제거됨 (사용 안함)
+    // headless는 항상 false로 하드코딩됨
     if (dbConfig.browser_close_delay) config.browserCloseDelay = parseInt(dbConfig.browser_close_delay);
     
     configCache = dbConfig;

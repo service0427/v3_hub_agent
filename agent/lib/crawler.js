@@ -1,4 +1,5 @@
 const logger = require('./logger');
+const { config } = require('./config');
 
 // Search keyword function
 async function searchKeyword(page, keyword, productCode) {
@@ -69,10 +70,10 @@ async function searchKeyword(page, keyword, productCode) {
       }
     }
     
-    // 최대 5페이지까지 검색
+    // 최대 페이지 수는 config에서 가져옴
     let foundRank = null;
     let currentPage = 1;
-    const maxPages = 5;
+    const maxPages = config.maxPages || 5;
     
     while (currentPage <= maxPages && !foundRank) {
       logger.info(`🔍 검색 중: ${keyword} (page ${currentPage}/${maxPages}) - 상품코드: ${productCode}`);
