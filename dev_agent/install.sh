@@ -76,13 +76,30 @@ EOF
     # MAC 주소 또는 Machine ID로 고유 ID 생성
     HOSTNAME=$(hostname)
     
-    # Machine ID 시도
-    if [ -f /etc/machine-id ]; then
+    # OS 감지
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "mingw"* ]]; then
+        # Windows (Git Bash)
+        # MAC 주소 시도 (ipconfig 사용)
+        MAC=$(ipconfig /all 2>/dev/null | grep -A 4 "Ethernet\|Wi-Fi" | grep "Physical Address" | head -1 | awk -F': ' '{print $2}' | tr -d '-' | tail -c 6 | tr '[:lower:]' '[:upper:]')
+        if [ -n "$MAC" ] && [ "$MAC" != "000000" ]; then
+            AGENT_ID="${HOSTNAME}-${MAC}"
+        else
+            # Windows 고유 ID (BIOS 시리얼 번호 일부)
+            SERIAL=$(wmic bios get serialnumber 2>/dev/null | grep -v SerialNumber | head -1 | tr -d ' \r\n' | tail -c 6)
+            if [ -n "$SERIAL" ]; then
+                AGENT_ID="${HOSTNAME}-${SERIAL}"
+            else
+                # 폴백
+                AGENT_ID="${HOSTNAME}-$(date +%s | tail -c 6)"
+            fi
+        fi
+    elif [ -f /etc/machine-id ]; then
+        # Linux with machine-id
         MACHINE_ID=$(head -c 8 /etc/machine-id)
         AGENT_ID="${HOSTNAME}-${MACHINE_ID}"
     else
-        # MAC 주소 시도
-        MAC=$(ip link show | grep -E '^[0-9]+: (e|w)' | head -1 | xargs ip link show | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1 | tr -d ':' | tail -c 6 | tr '[:lower:]' '[:upper:]')
+        # Linux/macOS without machine-id
+        MAC=$(ip link show 2>/dev/null | grep -E '^[0-9]+: (e|w)' | head -1 | xargs ip link show 2>/dev/null | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1 | tr -d ':' | tail -c 6 | tr '[:lower:]' '[:upper:]')
         if [ -n "$MAC" ]; then
             AGENT_ID="${HOSTNAME}-${MAC}"
         else
