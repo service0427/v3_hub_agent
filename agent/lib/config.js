@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 
 // Configuration (기본값, DB에서 덮어씀)
 const config = {
-  hubApiUrl: process.env.HUB_API_URL || 'http://localhost:3331',
+  hubApiUrl: process.env.HUB_API_URL || 'http://u24.techb.kr:3331',
   agentId: process.env.AGENT_ID || `agent-${Date.now()}`,
   browser: process.env.BROWSER || 'chrome',  // 기본값 chrome, 환경변수로 변경 가능
   maxKeywords: parseInt(process.argv[2] || '2'),
@@ -61,6 +61,7 @@ async function fetchConfigFromDB() {
     configFetchCount = 0;
     
     console.log('✅ Config loaded from DB');
+    console.log(`📡 Hub API URL: ${config.hubApiUrl}`);
     return dbConfig;
   } catch (error) {
     console.error('❌ Failed to load config from DB:', error.message);
