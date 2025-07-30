@@ -322,6 +322,11 @@ total_blocked=0
 session_start_time=$(date '+%Y-%m-%d %H:%M:%S')
 session_start_seconds=$(date +%s)
 
+# 실행 중인 버전 기록
+RUNNING_VERSION_FILE="$HOME/v3-agent/.running-version-$BROWSER"
+mkdir -p "$(dirname "$RUNNING_VERSION_FILE")"
+echo $(git rev-parse HEAD 2>/dev/null) > "$RUNNING_VERSION_FILE"
+
 # 세션 경과 시간 계산
 calculate_duration() {
     local now=$(date +%s)
@@ -366,6 +371,26 @@ clear
 echo -e "${CYAN}=== V3 Batch Check Continuous Mode (with Stats) ===${NC}"
 echo ""
 
+# 코드 버전 체크 함수
+check_code_version() {
+    if [ -f "$RUNNING_VERSION_FILE" ]; then
+        RUNNING_VERSION=$(cat "$RUNNING_VERSION_FILE" 2>/dev/null)
+        CURRENT_VERSION=$(git rev-parse HEAD 2>/dev/null)
+        
+        if [ -n "$RUNNING_VERSION" ] && [ -n "$CURRENT_VERSION" ] && [ "$RUNNING_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "[$(date '+%H:%M:%S')] 🔄 코드가 변경되었습니다. 재시작..."
+            echo "  실행 중: ${RUNNING_VERSION:0:7}"
+            echo "  현재 코드: ${CURRENT_VERSION:0:7}"
+            
+            # 새 버전 기록
+            echo "$CURRENT_VERSION" > "$RUNNING_VERSION_FILE"
+            
+            # 재시작
+            exec "$0" "$@"
+        fi
+    fi
+}
+
 # 카운트다운 표시 함수
 countdown() {
     local seconds=$1
@@ -393,6 +418,9 @@ while true; do
     
     # 재시작 필요 여부 확인
     check_restart_required
+    
+    # 코드 버전 체크 (다른 브라우저가 업데이트했을 수 있음)
+    check_code_version
     
     # 설정 갱신 체크 (10회마다)
     if [ $((run_count % config_refresh_interval)) -eq 0 ]; then
