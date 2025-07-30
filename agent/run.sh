@@ -33,6 +33,212 @@ config_fetch_count=0
 config_refresh_interval=10
 run_count=0
 
+# ========== 자동 업데이트 설정 ==========
+# 안전한 임시 디렉토리 설정
+get_safe_temp_dir() {
+    # 우선순위: 에이전트 디렉토리 > HOME > /tmp
+    if [ -w "$HOME/v3-agent" ]; then
+        echo "$HOME/v3-agent/.update"
+    elif [ -w "$HOME" ]; then
+        echo "$HOME/.v3-agent-update"
+    elif [ -w "/tmp" ]; then
+        echo "/tmp/v3-agent-update"
+    else
+        echo "/var/tmp/v3-agent-update"
+    fi
+}
+
+# 디렉토리 생성 및 권한 설정
+TEMP_DIR=$(get_safe_temp_dir)
+mkdir -p "$TEMP_DIR" 2>/dev/null || {
+    echo "⚠️ 임시 디렉토리 생성 실패: $TEMP_DIR"
+    TEMP_DIR="."  # 현재 디렉토리 사용
+}
+
+UPDATE_LOCK="$TEMP_DIR/update.lock"
+UPDATE_CHECK="$TEMP_DIR/last-check"
+UPDATE_PID="$TEMP_DIR/update.pid"
+UPDATE_INTERVAL=600  # 10분 (600초)
+
+# Stale lock 정리 함수
+cleanup_stale_locks() {
+    if [ -f "$UPDATE_PID" ]; then
+        OLD_PID=$(cat "$UPDATE_PID" 2>/dev/null)
+        
+        # PID가 존재하는지 확인
+        if [ -n "$OLD_PID" ] && ! kill -0 "$OLD_PID" 2>/dev/null; then
+            echo "🧹 오래된 Lock 정리 (PID: $OLD_PID)"
+            rm -f "$UPDATE_LOCK" "$UPDATE_PID"
+        fi
+    fi
+}
+
+# flock 대체 함수 (flock이 없는 경우)
+acquire_lock() {
+    local max_wait=10
+    local waited=0
+    
+    while [ $waited -lt $max_wait ]; do
+        # 원자적 디렉토리 생성 시도
+        if mkdir "$UPDATE_LOCK" 2>/dev/null; then
+            echo $$ > "$UPDATE_PID"
+            return 0
+        fi
+        
+        # 1초 대기
+        sleep 1
+        waited=$((waited + 1))
+        
+        # 5초 후 stale lock 체크
+        if [ $waited -eq 5 ]; then
+            cleanup_stale_locks
+        fi
+    done
+    
+    return 1  # Lock 획득 실패
+}
+
+release_lock() {
+    rm -rf "$UPDATE_LOCK" "$UPDATE_PID" 2>/dev/null
+}
+
+# 안전한 업데이트 체크 함수
+safe_update_check() {
+    local current_time=$(date +%s)
+    local last_check=0
+    
+    # 1. 마지막 체크 시간 확인
+    if [ -f "$UPDATE_CHECK" ] && [ -r "$UPDATE_CHECK" ]; then
+        last_check=$(cat "$UPDATE_CHECK" 2>/dev/null || echo 0)
+        
+        # 숫자 검증
+        if ! [[ "$last_check" =~ ^[0-9]+$ ]]; then
+            last_check=0
+        fi
+        
+        if [ $((current_time - last_check)) -lt $UPDATE_INTERVAL ]; then
+            return 0
+        fi
+    fi
+    
+    # 2. Lock 획득
+    if ! acquire_lock; then
+        echo "[$(date '+%H:%M:%S')] 다른 프로세스가 업데이트 체크 중..."
+        return 0
+    fi
+    
+    # trap으로 비정상 종료 시에도 lock 해제
+    trap 'release_lock' EXIT INT TERM
+    
+    # 3. Lock 획득 후 다시 시간 체크
+    if [ -f "$UPDATE_CHECK" ]; then
+        last_check=$(cat "$UPDATE_CHECK" 2>/dev/null || echo 0)
+        if [ $((current_time - last_check)) -lt $UPDATE_INTERVAL ]; then
+            release_lock
+            trap - EXIT INT TERM
+            return 0
+        fi
+    fi
+    
+    # 4. 체크 시간 기록
+    echo "$current_time" > "$UPDATE_CHECK" || {
+        echo "⚠️ 체크 시간 기록 실패"
+    }
+    
+    # 5. Git 상태 확인
+    if ! git status >/dev/null 2>&1; then
+        echo "❌ Git 저장소가 아닙니다"
+        release_lock
+        trap - EXIT INT TERM
+        return 1
+    fi
+    
+    # 6. 로컬 변경사항 체크
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "⚠️ 로컬 변경사항이 있어 업데이트 스킵"
+        release_lock
+        trap - EXIT INT TERM
+        return 0
+    fi
+    
+    # 7. 업데이트 체크 (네트워크 오류 처리)
+    echo "[$(date '+%H:%M:%S')] 🔍 업데이트 확인 중... ($BROWSER)"
+    
+    if ! git fetch origin main --quiet 2>/dev/null; then
+        echo "[$(date '+%H:%M:%S')] ⚠️ 네트워크 연결 실패"
+        release_lock
+        trap - EXIT INT TERM
+        return 0
+    fi
+    
+    LOCAL_COMMIT=$(git rev-parse HEAD 2>/dev/null)
+    REMOTE_COMMIT=$(git rev-parse origin/main 2>/dev/null)
+    
+    if [ -z "$LOCAL_COMMIT" ] || [ -z "$REMOTE_COMMIT" ]; then
+        echo "[$(date '+%H:%M:%S')] ⚠️ 커밋 정보 확인 실패"
+        release_lock
+        trap - EXIT INT TERM
+        return 0
+    fi
+    
+    if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+        echo "[$(date '+%H:%M:%S')] 🆕 새 버전 발견!"
+        echo "  현재: ${LOCAL_COMMIT:0:7}"
+        echo "  최신: ${REMOTE_COMMIT:0:7}"
+        
+        # 백업 생성 (선택사항)
+        BACKUP_DIR="$HOME/v3-agent-backup-$(date +%Y%m%d-%H%M%S)"
+        cp -r "$HOME/v3-agent" "$BACKUP_DIR" 2>/dev/null && {
+            echo "[$(date '+%H:%M:%S')] 💾 백업 생성: $BACKUP_DIR"
+        }
+        
+        # 업데이트 수행
+        if git pull origin main --quiet 2>/dev/null; then
+            echo "[$(date '+%H:%M:%S')] ✅ 코드 업데이트 성공"
+            
+            # npm 업데이트 (에러 무시)
+            npm install --quiet 2>/dev/null || {
+                echo "[$(date '+%H:%M:%S')] ⚠️ npm install 경고 (계속 진행)"
+            }
+            
+            # 재시작 플래그
+            touch "$TEMP_DIR/restart-required"
+            echo "[$(date '+%H:%M:%S')] 🔄 재시작 필요"
+        else
+            echo "[$(date '+%H:%M:%S')] ❌ Git pull 실패"
+            
+            # 롤백 (백업이 있으면)
+            if [ -d "$BACKUP_DIR" ]; then
+                echo "[$(date '+%H:%M:%S')] 🔙 이전 버전으로 롤백..."
+                rm -rf "$HOME/v3-agent"
+                mv "$BACKUP_DIR" "$HOME/v3-agent"
+            fi
+        fi
+    else
+        echo "[$(date '+%H:%M:%S')] ✓ 최신 버전입니다"
+    fi
+    
+    # 8. 정리
+    release_lock
+    trap - EXIT INT TERM
+    
+    return 0
+}
+
+# 재시작 체크 함수
+check_restart_required() {
+    if [ -f "$TEMP_DIR/restart-required" ]; then
+        echo "[$(date '+%H:%M:%S')] 🔄 업데이트로 인한 재시작..."
+        rm -f "$TEMP_DIR/restart-required"
+        
+        # 정리 작업
+        rm -f "$UPDATE_LOCK" "$UPDATE_PID"
+        
+        # 새 프로세스로 재시작
+        exec "$0" "$@"
+    fi
+}
+
 # DB에서 설정 가져오기 함수
 fetch_config_from_db() {
     # 배열이 선언되지 않았다면 다시 선언
@@ -181,6 +387,12 @@ countdown() {
 while true; do
     total_runs=$((total_runs + 1))
     run_count=$((run_count + 1))
+    
+    # 자동 업데이트 체크 (매 사이클마다, 10분 간격)
+    safe_update_check
+    
+    # 재시작 필요 여부 확인
+    check_restart_required
     
     # 설정 갱신 체크 (10회마다)
     if [ $((run_count % config_refresh_interval)) -eq 0 ]; then

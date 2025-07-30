@@ -125,6 +125,15 @@ GET https://u24.techb.kr/v3/api/coupang?keyword={keyword}&code={code}&pages={pag
 - **HEADLESS=false 설정 필수**
 - **원격 서버에서는 사용자가 직접 GUI 모드로 실행**
 
+## 🔄 자동 업데이트 정책
+- **10분 간격 체크**: 모든 에이전트가 10분마다 GitHub 최신 버전 확인
+- **자동 적용**: 새 버전 감지 시 자동으로 git pull 및 npm install
+- **안전한 재시작**: 현재 작업 완료 후 재시작
+- **중복 방지**: Chrome/Firefox 동시 실행 시 Lock 메커니즘으로 중복 방지
+- **롤백 지원**: 업데이트 실패 시 자동으로 이전 버전 복원
+- **로컬 변경 보호**: 로컬 수정사항이 있으면 업데이트 스킵
+- **네트워크 오류 처리**: 연결 실패 시 다음 체크 시간까지 대기
+
 ### 현재 사용 중인 에이전트
 - **dev_agent**: 개발/테스트용 에이전트
   - `run-continuous-stats.sh`: 실시간 통계와 함께 연속 실행
