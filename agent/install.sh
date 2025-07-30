@@ -20,21 +20,105 @@ BRANCH="main"
 echo -e "${BLUE}=== V3 Agent Installer ===${NC}"
 echo ""
 
-# Node.js 확인
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}❌ Node.js가 설치되어 있지 않습니다.${NC}"
-    echo "Node.js를 먼저 설치해주세요: https://nodejs.org/"
+# OS 감지
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+    VER=$VERSION_ID
+else
+    echo -e "${RED}❌ OS를 감지할 수 없습니다.${NC}"
     exit 1
+fi
+
+# 패키지 관리자 확인
+if command -v apt-get &> /dev/null; then
+    PKG_MANAGER="apt-get"
+elif command -v yum &> /dev/null; then
+    PKG_MANAGER="yum"
+elif command -v dnf &> /dev/null; then
+    PKG_MANAGER="dnf"
+else
+    echo -e "${RED}❌ 지원되지 않는 패키지 관리자입니다.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}✅ OS: $OS ($VER)${NC}"
+echo -e "${GREEN}✅ Package Manager: $PKG_MANAGER${NC}"
+
+# curl 확인 및 설치 (필수 도구)
+if ! command -v curl &> /dev/null; then
+    echo -e "${YELLOW}⚠️  curl이 설치되어 있지 않습니다. 자동으로 설치합니다...${NC}"
+    
+    if [ "$PKG_MANAGER" = "apt-get" ]; then
+        sudo apt-get update
+        sudo apt-get install -y curl
+    elif [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+        sudo $PKG_MANAGER install -y curl
+    fi
+    
+    if ! command -v curl &> /dev/null; then
+        echo -e "${RED}❌ curl 설치에 실패했습니다.${NC}"
+        exit 1
+    fi
+fi
+
+# Node.js 확인 및 설치
+if ! command -v node &> /dev/null; then
+    echo -e "${YELLOW}⚠️  Node.js가 설치되어 있지 않습니다. 자동으로 설치합니다...${NC}"
+    
+    # sudo 권한 확인
+    if ! command -v sudo &> /dev/null; then
+        echo -e "${RED}❌ sudo가 없습니다. root 권한으로 실행해주세요.${NC}"
+        exit 1
+    fi
+    
+    # NodeSource 저장소 추가 및 Node.js 설치
+    if [ "$PKG_MANAGER" = "apt-get" ]; then
+        echo -e "${BLUE}📦 NodeSource 저장소 추가 중...${NC}"
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+    elif [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+        echo -e "${BLUE}📦 NodeSource 저장소 추가 중...${NC}"
+        curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+        sudo $PKG_MANAGER install -y nodejs
+    else
+        echo -e "${RED}❌ Node.js 자동 설치를 지원하지 않는 시스템입니다.${NC}"
+        echo "Node.js를 수동으로 설치해주세요: https://nodejs.org/"
+        exit 1
+    fi
+    
+    # 설치 확인
+    if ! command -v node &> /dev/null; then
+        echo -e "${RED}❌ Node.js 설치에 실패했습니다.${NC}"
+        exit 1
+    fi
 fi
 
 NODE_VERSION=$(node -v)
 echo -e "${GREEN}✅ Node.js 발견: $NODE_VERSION${NC}"
 
-# Git 확인
+# Git 확인 및 설치
 if ! command -v git &> /dev/null; then
-    echo -e "${RED}❌ Git이 설치되어 있지 않습니다.${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️  Git이 설치되어 있지 않습니다. 자동으로 설치합니다...${NC}"
+    
+    if [ "$PKG_MANAGER" = "apt-get" ]; then
+        sudo apt-get update
+        sudo apt-get install -y git
+    elif [ "$PKG_MANAGER" = "yum" ] || [ "$PKG_MANAGER" = "dnf" ]; then
+        sudo $PKG_MANAGER install -y git
+    else
+        echo -e "${RED}❌ Git 자동 설치를 지원하지 않는 시스템입니다.${NC}"
+        exit 1
+    fi
+    
+    # 설치 확인
+    if ! command -v git &> /dev/null; then
+        echo -e "${RED}❌ Git 설치에 실패했습니다.${NC}"
+        exit 1
+    fi
 fi
+
+echo -e "${GREEN}✅ Git 발견${NC}"
 
 # 기존 설치 제거
 if [ -d "$INSTALL_DIR" ]; then
