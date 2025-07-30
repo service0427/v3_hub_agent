@@ -77,7 +77,7 @@ EOF
     HOSTNAME=$(hostname)
     
     # OS 감지
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "mingw"* ]]; then
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "mingw"* || "$OSTYPE" == "cygwin" ]] || command -v ipconfig &>/dev/null; then
         # Windows (Git Bash)
         # MAC 주소 시도 (ipconfig 사용)
         MAC=$(ipconfig /all 2>/dev/null | grep -A 4 "Ethernet\|Wi-Fi" | grep "Physical Address" | head -1 | awk -F': ' '{print $2}' | tr -d '-' | tail -c 6 | tr '[:lower:]' '[:upper:]')
@@ -204,7 +204,8 @@ echo "  v3-agent check   # 단일 체크"
 echo "  v3-agent status  # 상태 확인"
 echo "  v3-agent logs    # 로그 확인"
 echo ""
-echo -e "${YELLOW}⚠️  새 터미널을 열거나 다음 명령을 실행하세요:${NC}"
-echo "  source ~/.bashrc"
+echo -e "${YELLOW}⚠️  새 터미널을 열거나 아래 명령을 복사해서 실행하세요:${NC}"
+echo ""
+echo -e "${GREEN}source ~/.bashrc${NC}"
 echo ""
 echo -e "${BLUE}설치 위치: $INSTALL_DIR${NC}"
