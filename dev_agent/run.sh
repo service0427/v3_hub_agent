@@ -218,7 +218,7 @@ while true; do
     is_blocked=false
     
     # 차단 감지 (네트워크 에러 포함) - 우선순위 최상위
-    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|net::ERR_|BLOCKED|blocked|차단|Timeout.*exceeded|waitForSelector.*Timeout|chrome-error://|Network/page error|Page error detected|browserType\.launch:|Target.*closed|Navigation failed|Error page detected)"; then
+    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|net::ERR_|BLOCKED|blocked|차단|Timeout.*exceeded|waitForSelector.*Timeout|chrome-error://|Network/page error|Page error detected|browserType\.launch:|Target.*closed|Navigation failed|Error page detected|Execution context was destroyed)"; then
         is_blocked=true
         total_blocked=$((total_blocked + 1))
         # 차단 원인 표시
@@ -242,6 +242,8 @@ while true; do
             block_reason="🎯 Target closed error"
         elif echo "$output" | grep -q "Error page detected"; then
             block_reason="🌐 Error page detected (Network blocked)"
+        elif echo "$output" | grep -q "Execution context was destroyed"; then
+            block_reason="🔄 Page navigation detected (Context destroyed)"
         else
             block_reason="🚨 Unknown Block"
         fi
