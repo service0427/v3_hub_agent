@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# V3 Agent Installer Script
-# Usage: curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/dev_agent/install.sh | bash
+# V3 Agent Installer Script (Chrome/Firefox 통합 버전)
+# Usage: curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/agent/install.sh | bash
 
 set -e
 
@@ -46,8 +46,8 @@ fi
 echo -e "${BLUE}📥 리포지토리 다운로드 중...${NC}"
 git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
 
-# dev_agent 디렉토리로 이동
-cd "$INSTALL_DIR/dev_agent"
+# agent 디렉토리로 이동
+cd "$INSTALL_DIR/agent"
 
 # 의존성 설치
 echo -e "${BLUE}📦 의존성 설치 중...${NC}"
@@ -64,7 +64,7 @@ if [ ! -f .env ]; then
         cat > .env << EOF
 # V3 Agent Configuration
 HUB_API_URL=http://u24.techb.kr:3331
-# Chrome only (Firefox support removed)
+BROWSER=chrome  # chrome 또는 firefox
 LOG_LEVEL=info
 EOF
     fi
@@ -123,11 +123,11 @@ mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/v3-agent" << 'EOF'
 #!/bin/bash
 
-V3_AGENT_DIR="$HOME/v3-agent/dev_agent"
+V3_AGENT_DIR="$HOME/v3-agent/agent"
 
 if [ ! -d "$V3_AGENT_DIR" ]; then
     echo "❌ V3 Agent가 설치되어 있지 않습니다."
-    echo "설치: curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/dev_agent/install.sh | bash"
+    echo "설치: curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/agent/install.sh | bash"
     exit 1
 fi
 
@@ -135,8 +135,16 @@ cd "$V3_AGENT_DIR"
 
 case "$1" in
     start|run)
-        echo "🚀 V3 Agent 시작..."
-        ./run.sh
+        echo "🚀 V3 Agent 시작 (기본: Chrome)..."
+        ./run-chrome.sh
+        ;;
+    chrome)
+        echo "🚀 V3 Agent 시작 (Chrome)..."
+        ./run-chrome.sh
+        ;;
+    firefox)
+        echo "🚀 V3 Agent 시작 (Firefox)..."
+        ./run-firefox.sh
         ;;
     check)
         echo "🔍 단일 체크 실행..."
@@ -165,7 +173,9 @@ case "$1" in
         echo "사용법: v3-agent [명령]"
         echo ""
         echo "명령어:"
-        echo "  start, run   연속 실행 모드 시작"
+        echo "  start, run   연속 실행 모드 시작 (Chrome)"
+        echo "  chrome       Chrome 브라우저로 실행"
+        echo "  firefox      Firefox 브라우저로 실행"
         echo "  check [n]    n개 키워드 체크 (기본값: 1)"
         echo "  status       실행 상태 확인"
         echo "  logs         실시간 로그 확인"
@@ -199,13 +209,18 @@ echo ""
 echo -e "${GREEN}✅ V3 Agent 설치가 완료되었습니다!${NC}"
 echo ""
 echo -e "${BLUE}실행 방법:${NC}"
-echo "  v3-agent start   # 연속 실행 모드"
-echo "  v3-agent check   # 단일 체크"
-echo "  v3-agent status  # 상태 확인"
-echo "  v3-agent logs    # 로그 확인"
+echo "  v3-agent chrome   # Chrome 브라우저로 실행"
+echo "  v3-agent firefox  # Firefox 브라우저로 실행"
+echo "  v3-agent check    # 단일 체크"
+echo "  v3-agent status   # 상태 확인"
 echo ""
 echo -e "${YELLOW}⚠️  새 터미널을 열거나 아래 명령을 복사해서 실행하세요:${NC}"
 echo ""
 echo -e "${GREEN}source ~/.bashrc${NC}"
 echo ""
-echo -e "${BLUE}설치 위치: $INSTALL_DIR${NC}"
+echo -e "${BLUE}설치 위치: $INSTALL_DIR/agent${NC}"
+echo ""
+echo -e "${YELLOW}또는 직접 실행:${NC}"
+echo "  cd $INSTALL_DIR/agent"
+echo "  ./run-chrome.sh   # Chrome 실행"
+echo "  ./run-firefox.sh  # Firefox 실행"
