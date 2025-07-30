@@ -53,6 +53,10 @@ cd "$INSTALL_DIR/agent"
 echo -e "${BLUE}📦 의존성 설치 중...${NC}"
 npm install
 
+# Playwright 브라우저 설치
+echo -e "${BLUE}🌐 브라우저 설치 중...${NC}"
+npx playwright install chromium firefox
+
 # .env 파일은 선택사항 - 있으면 사용, 없으면 DB 설정 사용
 if [ -f .env.example ] && [ ! -f .env ]; then
     echo -e "${BLUE}ℹ️  .env 파일이 없습니다. DB 설정을 사용합니다.${NC}"
