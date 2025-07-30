@@ -181,11 +181,49 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
         )
       ORDER BY 
         CASE 
-          WHEN krc.id IS NULL THEN '1900-01-01'::TIMESTAMP
-          ELSE krc.updated_at 
-        END ASC,
-        last_check_time ASC,
-        kl.id ASC
+          WHEN krc.id IS NULL THEN 0  -- 오늘 첫 체크는 최우선
+          ELSE COALESCE(krc.total_checks, 0)
+        END ASC,  -- 체크 횟수가 적은 것 우선
+        CASE
+          WHEN CURRENT_TIME::TIME >= GREATEST(
+            COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+            COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+          ) THEN
+            EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+              COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+            )))
+          ELSE
+            86400 + EXTRACT(EPOCH FROM (CURRENT_TIME - GREATEST(
+              COALESCE(krc.check_time_1::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_2::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_3::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_4::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_5::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_6::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_7::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_8::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_9::TIME, '00:00:00'::TIME),
+              COALESCE(krc.check_time_10::TIME, '00:00:00'::TIME)
+            )))
+        END DESC,  -- 마지막 체크로부터 시간이 많이 지난 것 우선
+        RANDOM()  -- 동일 조건시 랜덤 분산
       LIMIT $1
     `;
 

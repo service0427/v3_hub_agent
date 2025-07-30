@@ -10,9 +10,7 @@ ParserHub V3는 **쿠팡 전용 실시간 제품 순위 조회 서비스**입니
 
 ### 핵심 특징
 - **쿠팡 전용**: 네이버 등 타 플랫폼 지원 안함
-- **멀티 브라우저 지원**: 
-  - Linux: Chrome, Firefox, Firefox Nightly 지원
-  - Windows: Chrome, Firefox, Edge 지원
+- **Chrome 전용**: 안정성과 성능을 위해 Chrome 브라우저만 지원
 - **실시간 조회**: 캐시 없이 에이전트 직접 크롤링
 - **V2 격리**: 기존 V2 시스템과 완전히 분리된 환경에서 동작
 - **단순 롤링**: 쿨다운 없이 모든 에이전트 순차 사용
@@ -22,18 +20,17 @@ ParserHub V3는 **쿠팡 전용 실시간 제품 순위 조회 서비스**입니
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│   Client Apps   │    │   Hub Server     │    │  Windows VM Agents  │
+│   Client Apps   │    │   Hub Server     │    │  Linux/Windows VM   │
 │                 │    │   (Coupang Only) │    │                     │
 │ - Coupang API   │◄──►│ - Single API     │◄──►│ ┌─────────────────┐ │
-│   Only          │    │ - Agent Pool     │    │ │ Chrome Agent    │ │
-└─────────────────┘    │ - Multi-Browser  │    │ └─────────────────┘ │
-                       │   Management     │    │ ┌─────────────────┐ │
-                       └──────────────────┘    │ │ Firefox Agent   │ │
-                              │                │ └─────────────────┘ │
-                              ▼                │ ┌─────────────────┐ │
-                       ┌──────────────────┐    │ │ Edge Agent      │ │
-                       │   PostgreSQL     │    │ └─────────────────┘ │
-                       │                  │    └─────────────────────┘
+│   Only          │    │ - Agent Pool     │    │ │  Chrome Agents  │ │
+└─────────────────┘    │ - Chrome Only    │    │ └─────────────────┘ │
+                       └──────────────────┘    └─────────────────────┘
+                              │                
+                              ▼                
+                       ┌──────────────────┐    
+                       │   PostgreSQL     │    
+                       │                  │    
                        │ - v3_api_keys    │
                        │ - v3_keyword_list │
                        │ - v3_ranking_checks│
@@ -56,7 +53,7 @@ v3_hub_agent/
 │   │   │   └── manager.ts        # 에이전트 풀 관리
 │   │   ├── config/
 │   │   │   ├── index.ts          # 환경 설정
-│   │   │   └── browser.ts        # OS별 브라우저 지원
+│   │   │   └── browser.ts        # Chrome 브라우저 설정
 │   │   ├── db/
 │   │   │   ├── connection.ts     # PostgreSQL 연결
 │   │   │   └── models/
@@ -181,10 +178,10 @@ cd hub/
 docker-compose up -d
 ```
 
-### 에이전트 배포 (Windows VM)
+### 에이전트 배포
 1. Node.js 설치
-2. 브라우저 설치 (Chrome, Firefox, Edge)
-3. 에이전트 소스 복사 후 실행
+2. Chrome 브라우저 설치
+3. 원클릭 설치: `curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/dev_agent/install.sh | bash`
 
 ## 📊 모니터링
 
@@ -194,14 +191,14 @@ docker-compose up -d
 
 ### 주요 메트릭
 - API 요청 수
-- 브라우저별 성공률
+- 에이전트별 성공률
 - 차단 발생률
 - 응답 시간
 
 ## 🔐 보안 고려사항
 
 - API 키 기반 인증
-- 브라우저별 차단 관리
+- 에이전트별 차단 관리
 - 로그 데이터 보안
 - PostgreSQL 단일 DB 사용
 
@@ -209,7 +206,7 @@ docker-compose up -d
 
 ### 일반적인 문제
 1. **에이전트 연결 안됨**: 방화벽 설정 확인
-2. **브라우저 차단**: 다른 브라우저로 자동 전환
+2. **Chrome 차단**: 대기 시간 자동 증가로 회피
 3. **순위 조회 실패**: 연속 3회 실패 시 자동 중단
 
 ### 로그 확인
@@ -247,7 +244,7 @@ tail -f agent/logs/agent.log
 - **에러 처리**: 모든 에러는 적절히 처리하고 로깅
 
 ### 데이터 정책
-- **순위 체크 제한**: 10분 간격으로 최대 10회 체크
+- **순위 체크 제한**: 30분 간격으로 최대 10회 체크
 - **자동 중단**: 연속 3회 순위 0일 경우 자동 중단
 - **재시작 가능**: 수동으로 is_completed=FALSE 설정 시 재시작
 - **단일 DB 사용**: PostgreSQL만 사용 (MySQL 분리)
@@ -256,4 +253,4 @@ tail -f agent/logs/agent.log
 
 **개발 시작일**: 2025-07-27  
 **대상 버전**: ParserHub V3.0.0  
-**개발 환경**: Linux(허브) + Windows VM(에이전트)
+**개발 환경**: Linux(허브) + Linux/Windows(에이전트)
