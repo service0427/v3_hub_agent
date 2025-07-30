@@ -53,64 +53,10 @@ cd "$INSTALL_DIR/agent"
 echo -e "${BLUE}📦 의존성 설치 중...${NC}"
 npm install
 
-# .env 파일 생성
-if [ ! -f .env ]; then
-    echo -e "${BLUE}🔧 환경 설정 파일 생성 중...${NC}"
-    
-    # 프로덕션 환경 파일 복사
-    if [ -f .env.production ]; then
-        cp .env.production .env
-    else
-        cat > .env << EOF
-# V3 Agent Configuration
-HUB_API_URL=http://u24.techb.kr:3331
-BROWSER=chrome  # chrome 또는 firefox
-LOG_LEVEL=info
-EOF
-    fi
-    
-    # Agent ID 자동 생성 및 추가
-    echo "" >> .env
-    echo "# Agent identification (자동 생성됨)" >> .env
-    
-    # MAC 주소 또는 Machine ID로 고유 ID 생성
-    HOSTNAME=$(hostname)
-    
-    # OS 감지
-    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "mingw"* || "$OSTYPE" == "cygwin" ]] || command -v ipconfig &>/dev/null; then
-        # Windows (Git Bash)
-        # MAC 주소 시도 (ipconfig 사용)
-        MAC=$(ipconfig /all 2>/dev/null | grep -A 4 "Ethernet\|Wi-Fi" | grep "Physical Address" | head -1 | awk -F': ' '{print $2}' | tr -d '-' | tail -c 6 | tr '[:lower:]' '[:upper:]')
-        if [ -n "$MAC" ] && [ "$MAC" != "000000" ]; then
-            AGENT_ID="${HOSTNAME}-${MAC}"
-        else
-            # Windows 고유 ID (BIOS 시리얼 번호 일부)
-            SERIAL=$(wmic bios get serialnumber 2>/dev/null | grep -v SerialNumber | head -1 | tr -d ' \r\n' | tail -c 6)
-            if [ -n "$SERIAL" ]; then
-                AGENT_ID="${HOSTNAME}-${SERIAL}"
-            else
-                # 폴백
-                AGENT_ID="${HOSTNAME}-$(date +%s | tail -c 6)"
-            fi
-        fi
-    elif [ -f /etc/machine-id ]; then
-        # Linux with machine-id
-        MACHINE_ID=$(head -c 8 /etc/machine-id)
-        AGENT_ID="${HOSTNAME}-${MACHINE_ID}"
-    else
-        # Linux/macOS without machine-id
-        MAC=$(ip link show 2>/dev/null | grep -E '^[0-9]+: (e|w)' | head -1 | xargs ip link show 2>/dev/null | grep -oE '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}' | head -1 | tr -d ':' | tail -c 6 | tr '[:lower:]' '[:upper:]')
-        if [ -n "$MAC" ]; then
-            AGENT_ID="${HOSTNAME}-${MAC}"
-        else
-            # 폴백
-            AGENT_ID="${HOSTNAME}-$(date +%s | tail -c 6)"
-        fi
-    fi
-    
-    echo "AGENT_ID=${AGENT_ID}" >> .env
-    
-    echo -e "${GREEN}✅ .env 파일이 생성되었습니다.${NC}"
+# .env 파일은 선택사항 - 있으면 사용, 없으면 DB 설정 사용
+if [ -f .env.example ] && [ ! -f .env ]; then
+    echo -e "${BLUE}ℹ️  .env 파일이 없습니다. DB 설정을 사용합니다.${NC}"
+    echo -e "${YELLOW}   필요시 'cp .env.example .env'로 생성할 수 있습니다.${NC}"
 fi
 
 # 실행 스크립트 생성
@@ -207,6 +153,11 @@ fi
 # 설치 완료
 echo ""
 echo -e "${GREEN}✅ V3 Agent 설치가 완료되었습니다!${NC}"
+echo ""
+echo -e "${BLUE}🎯 중요: 에이전트는 DB 설정을 자동으로 사용합니다.${NC}"
+echo -e "   - Hub API URL, 대기 시간 등은 v3_agent_config 테이블에서 관리"
+echo -e "   - Agent ID는 시스템 정보를 기반으로 자동 생성"
+echo -e "   - .env 파일 없이도 정상 작동"
 echo ""
 echo -e "${BLUE}실행 방법:${NC}"
 echo "  v3-agent chrome   # Chrome 브라우저로 실행"

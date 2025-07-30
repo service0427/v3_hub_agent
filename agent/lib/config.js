@@ -1,10 +1,19 @@
-require('dotenv').config();
+// dotenv는 선택사항 - .env 파일이 있으면 사용
+try {
+  require('dotenv').config();
+} catch (e) {
+  // .env 파일이 없어도 정상 작동
+}
 const { Pool } = require('pg');
+const { getUniqueAgentId } = require('./system-info');
+
+// 초기 에이전트 ID (나중에 시스템 정보로 업데이트)
+let initialAgentId = process.env.AGENT_ID || `agent-${Date.now()}`;
 
 // Configuration (기본값, DB에서 덮어씀)
 const config = {
   hubApiUrl: process.env.HUB_API_URL || 'http://u24.techb.kr:3331',
-  agentId: process.env.AGENT_ID || `agent-${Date.now()}`,
+  agentId: initialAgentId,
   browser: process.env.BROWSER || 'chrome',  // 기본값 chrome, 환경변수로 변경 가능
   maxKeywords: parseInt(process.argv[2] || '2'),
   maxPages: parseInt(process.env.BATCH_MAX_PAGES || '5'),
