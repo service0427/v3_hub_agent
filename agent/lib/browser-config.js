@@ -8,15 +8,8 @@ const browserConfigs = {
     launcher: chromium,
     launchOptions: {
       headless: false,
-      // channel: 'chrome',  // 시스템 Chrome 사용 시
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-web-security',
-        '--disable-features=IsolateOrigins,site-per-process'
-      ],
+      channel: 'chrome',  // 시스템 Chrome 사용
+      args: ['--disable-blink-features=AutomationControlled'],
       timeout: 60000
     }
   },
@@ -74,6 +67,8 @@ async function launchBrowser(browserType = 'chrome', customOptions = {}) {
   };
   
   console.log(`🌐 ${browserConfig.name} 브라우저 실행 중...`);
+  console.log(`📁 브라우저 채널: ${options.channel || 'chromium'}`);
+  
   return await browserConfig.launcher.launch(options);
 }
 
