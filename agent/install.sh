@@ -141,22 +141,14 @@ npm install
 echo -e "${BLUE}🌐 브라우저 설치 중...${NC}"
 npx playwright install chromium firefox webkit
 
-# WebKit 시스템 의존성 설치 (선택사항)
+# WebKit 시스템 의존성 자동 설치
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo ""
-    echo -e "${YELLOW}📦 WebKit을 사용하려면 시스템 의존성이 필요합니다.${NC}"
-    echo -e "${YELLOW}   sudo 권한이 필요합니다. 설치하시겠습니까? (y/N)${NC}"
-    read -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${BLUE}🔧 WebKit 시스템 의존성 설치 중...${NC}"
-        sudo npx playwright install-deps webkit || {
-            echo -e "${YELLOW}⚠️  의존성 설치 실패. WebKit이 제대로 작동하지 않을 수 있습니다.${NC}"
-        }
-    else
-        echo -e "${YELLOW}ℹ️  WebKit 의존성을 나중에 설치하려면:${NC}"
+    echo -e "${BLUE}🔧 WebKit 시스템 의존성 설치 중...${NC}"
+    sudo npx playwright install-deps webkit || {
+        echo -e "${YELLOW}⚠️  의존성 설치 실패. 수동으로 설치해주세요:${NC}"
         echo -e "${YELLOW}   sudo npx playwright install-deps webkit${NC}"
-    fi
+    }
 fi
 
 # .env 파일은 선택사항 - 있으면 사용, 없으면 DB 설정 사용
