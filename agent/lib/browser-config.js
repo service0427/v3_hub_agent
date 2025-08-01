@@ -1,5 +1,5 @@
 // 브라우저별 설정 관리
-const { chromium, firefox } = require('playwright');
+const { chromium, firefox, webkit } = require('playwright');
 
 // 브라우저별 설정
 const browserConfigs = {
@@ -22,6 +22,15 @@ const browserConfigs = {
       firefoxUserPrefs: {
         'dom.webdriver.enabled': false
       },
+      timeout: 60000
+    }
+  },
+  
+  webkit: {
+    name: 'WebKit',
+    launcher: webkit,
+    launchOptions: {
+      headless: false,
       timeout: 60000
     }
   }
