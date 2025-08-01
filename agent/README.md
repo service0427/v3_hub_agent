@@ -1,6 +1,6 @@
-# V3 Agent - Chrome/Firefox 통합 에이전트
+# V3 Agent - Chrome/Firefox/WebKit 통합 에이전트
 
-쿠팡 키워드 순위를 체크하는 통합 에이전트입니다. Chrome과 Firefox 브라우저를 선택적으로 사용할 수 있습니다.
+쿠팡 키워드 순위를 체크하는 통합 에이전트입니다. Chrome, Firefox, WebKit 브라우저를 선택적으로 사용할 수 있습니다.
 
 ## 🚀 빠른 시작
 
@@ -16,6 +16,13 @@
 ./run.sh firefox
 # 또는
 ./run-firefox.sh
+```
+
+### WebKit 실행
+```bash
+./run.sh webkit
+# 또는
+./run-webkit.sh
 ```
 
 ## 📦 설치
@@ -37,7 +44,7 @@ curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/agent/
 ### 필수 환경 변수 (.env)
 ```bash
 HUB_API_URL=http://u24.techb.kr:3331  # Hub API 주소
-BROWSER=chrome                         # 기본 브라우저 (chrome/firefox)
+BROWSER=chrome                         # 기본 브라우저 (chrome/firefox/webkit)
 ```
 
 ### 브라우저 선택
@@ -50,10 +57,20 @@ BROWSER=chrome                         # 기본 브라우저 (chrome/firefox)
 ### 브라우저별 특징
 - **Chrome**: 안정적, 빠른 속도
 - **Firefox**: 페이지네이션 클릭 방식 지원
+- **WebKit**: Safari 엔진, 실험적 지원
 
 ### 페이지 이동 방식
 - **Chrome**: URL 직접 이동
 - **Firefox**: 페이지네이션 버튼 클릭 (차단 회피)
+- **WebKit**: URL 직접 이동
+
+### WebKit 사용 시 주의사항
+- **Linux**: 시스템 의존성 필수 설치
+  ```bash
+  sudo npx playwright install-deps webkit
+  ```
+- **Windows**: 지원되지 않음
+- **macOS**: 별도 설치 없이 작동
 
 ### 실시간 통계
 - 성공/실패/차단 건수
@@ -68,6 +85,7 @@ agent/
 ├── run.sh                # 메인 실행 스크립트
 ├── run-chrome.sh         # Chrome 전용 실행
 ├── run-firefox.sh        # Firefox 전용 실행
+├── run-webkit.sh         # WebKit 전용 실행
 ├── check.js              # API 체크 스크립트
 ├── lib/
 │   ├── api-client.js     # API 클라이언트
