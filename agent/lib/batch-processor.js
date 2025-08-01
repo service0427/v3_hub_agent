@@ -58,22 +58,61 @@ async function processBatch(browser, keywords, stats) {
         // 처리 시간 계산 (실패 케이스에도 적용)
         const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
         
-        // 차단 감지
+        // 에러 유형 세분화
         const errorMsg = error.message;
+        let errorType = 'UNKNOWN_ERROR';
+        
+        // 차단 감지 - 실제 네트워크 차단만 포함
         const isBlocked = errorMsg.includes('ERR_HTTP2_PROTOCOL_ERROR') ||
-                         errorMsg.includes('net::ERR_') ||
-                         errorMsg.includes('Timeout') ||
-                         errorMsg.includes('timeout') ||
+                         errorMsg.includes('ERR_CONNECTION_CLOSED') ||
+                         errorMsg.includes('NS_ERROR_NET_INTERRUPT') ||
+                         errorMsg.includes('HTTP/2 Error: INTERNAL_ERROR') ||  // WebKit 차단
+                         errorMsg.includes('net::ERR_FAILED') ||
+                         errorMsg.includes('403 Forbidden') ||
                          errorMsg.includes('blocked') ||
-                         errorMsg.includes('403');
+                         errorMsg.includes('Bot Detection') ||
+                         errorMsg.includes('Security Challenge');
+        
+        // 타임아웃 감지
+        const isTimeout = errorMsg.includes('Timeout') || 
+                         errorMsg.includes('timeout') ||
+                         errorMsg.includes('TimeoutError') ||
+                         errorMsg.includes('exceeded') ||
+                         errorMsg.includes('waitForSelector') ||
+                         errorMsg.includes('waitForFunction') ||
+                         error.name === 'PAGE_NAVIGATION_TIMEOUT';
+        
+        // 네비게이션 오류 감지
+        const isNavigationError = errorMsg.includes('Navigation') ||
+                                 errorMsg.includes('goto') ||
+                                 errorMsg.includes('net::') ||
+                                 errorMsg.includes('Cannot navigate');
+        
+        // 네트워크 오류 감지
+        const isNetworkError = errorMsg.includes('Network') ||
+                              errorMsg.includes('net::') ||
+                              errorMsg.includes('HTTP') ||
+                              errorMsg.includes('getaddrinfo');
         
         if (isBlocked) {
+          errorType = 'BLOCKED';
           logger.error(`🚫 [${idInfo}] [Check #${checkNum}] BLOCKED: ${keyword} - ${errorMsg} ⏱️ ${elapsedTime}초`);
-          await logFailure(keyword, product_code, `BLOCKED - ${errorMsg}`);
+        } else if (isTimeout) {
+          errorType = 'TIMEOUT';
+          logger.error(`⏱️ [${idInfo}] [Check #${checkNum}] TIMEOUT: ${keyword} - ${errorMsg} ⏱️ ${elapsedTime}초`);
+        } else if (isNavigationError) {
+          errorType = 'NAVIGATION_ERROR';
+          logger.error(`🌐 [${idInfo}] [Check #${checkNum}] Navigation Error: ${keyword} - ${errorMsg} ⏱️ ${elapsedTime}초`);
+        } else if (isNetworkError) {
+          errorType = 'NETWORK_ERROR';
+          logger.error(`🔌 [${idInfo}] [Check #${checkNum}] Network Error: ${keyword} - ${errorMsg} ⏱️ ${elapsedTime}초`);
         } else {
-          logger.error(`❗ [${idInfo}] [Check #${checkNum}] Failed: ${keyword} - ${errorMsg} ⏱️ ${elapsedTime}초`);
-          await logFailure(keyword, product_code, errorMsg);
+          errorType = 'SEARCH_ERROR';
+          logger.error(`❗ [${idInfo}] [Check #${checkNum}] Search Error: ${keyword} - ${errorMsg} ⏱️ ${elapsedTime}초`);
         }
+        
+        // 에러 타입을 명시적으로 포함하여 전송
+        await logFailure(keyword, product_code, `${errorType} - ${errorMsg}`);
         
         return { success: false, keyword, error: errorMsg, elapsedTime };
         

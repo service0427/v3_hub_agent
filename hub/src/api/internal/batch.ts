@@ -32,12 +32,27 @@ router.get('/keywords', asyncHandler(async (req: Request, res: Response) => {
   }
 
   const limitNum = Math.min(parseInt(limit as string) || 10, 100);
-  const minCheckInterval = parseInt(process.env.MIN_CHECK_INTERVAL || '600'); // 기본 10분
+  
+  // v3_agent_config에서 min_check_interval 값 가져오기 (최우선)
+  let minCheckInterval = parseInt(process.env.MIN_CHECK_INTERVAL || '1800'); // 기본 30분 (1800초)
+  try {
+    const configResult = await pool.query(
+      "SELECT config_value FROM v3_agent_config WHERE config_key = 'min_check_interval'"
+    );
+    if (configResult.rows.length > 0) {
+      minCheckInterval = parseInt(configResult.rows[0].config_value);
+      logger.info('Using min_check_interval from v3_agent_config', { minCheckInterval });
+    }
+  } catch (error) {
+    logger.warn('Failed to get min_check_interval from v3_agent_config, using env or default', { error });
+  }
+  
   const syncTimeLimit = parseInt(process.env.SYNC_TIME_LIMIT || '60'); // 기본 60분
 
   logger.info('Keyword search parameters', {
     limitNum,
     minCheckInterval,
+    minCheckIntervalMinutes: Math.round(minCheckInterval / 60), // 분 단위로도 표시
     syncTimeLimit,
     agentId
   });
@@ -652,12 +667,24 @@ router.post('/failure', asyncHandler(async (req: Request, res: Response) => {
     
     await pool.query(resetProcessingTimeQuery, [keyword, productCode]);
     
-    // 에러 타입 판별
-    const isBlocked = errorMessage && /BLOCKED|blocked|차단|403|chrome-error:|ERR_HTTP2_PROTOCOL_ERROR/i.test(errorMessage);
-    const errorType = isBlocked ? 'BLOCKED' : 
-                     errorMessage.includes('Timeout') ? 'TIMEOUT' :
-                     errorMessage.includes('Network') ? 'NETWORK' :
-                     errorMessage.includes('HTTP2') ? 'HTTP2_ERROR' : 'SEARCH_ERROR';
+    // 에러 타입 판별 (에이전트에서 전송한 타입 우선 사용)
+    let errorType = 'UNKNOWN_ERROR';
+    
+    // 에이전트에서 명시적으로 전송한 타입 추출
+    const typeMatch = errorMessage.match(/^(BLOCKED|TIMEOUT|NAVIGATION_ERROR|NETWORK_ERROR|SEARCH_ERROR|UNKNOWN_ERROR)\s*-\s*/);
+    if (typeMatch) {
+      errorType = typeMatch[1];
+    } else {
+      // 폴백: 메시지 내용으로 타입 추론
+      const isBlocked = errorMessage && /BLOCKED|blocked|차단|403|chrome-error:|ERR_HTTP2_PROTOCOL_ERROR|NS_ERROR_NET_INTERRUPT|HTTP\/2 Error: INTERNAL_ERROR/i.test(errorMessage);
+      errorType = isBlocked ? 'BLOCKED' : 
+                       errorMessage.includes('Timeout') ? 'TIMEOUT' :
+                       errorMessage.includes('Network') ? 'NETWORK' :
+                       errorMessage.includes('Navigation') ? 'NAVIGATION_ERROR' :
+                       errorMessage.includes('HTTP2') ? 'HTTP2_ERROR' : 'SEARCH_ERROR';
+    }
+    
+    const isBlocked = errorType === 'BLOCKED';
     
     // 에이전트 통계 업데이트
     await updateAgentStats(
@@ -804,7 +831,7 @@ async function updateStatistics(keyword: string, productCode: string): Promise<v
 }
 
 /**
- * 연속 3번 0 체크 확인 함수
+ * 연속 5번 0 체크 확인 함수 (0이 아닌 값이 있으면 조건 해제)
  */
 async function checkConsecutiveZeros(keyword: string, productCode: string): Promise<void> {
   try {
@@ -827,7 +854,21 @@ async function checkConsecutiveZeros(keyword: string, productCode: string): Prom
       row.check_6, row.check_7, row.check_8, row.check_9, row.check_10
     ];
     
-    // 마지막 3개의 체크값 확인
+    // 0이 아닌 값이 있는지 먼저 전체 확인
+    const hasNonZeroValue = checks.some(check => check !== null && check > 0);
+    
+    // 0이 아닌 값이 하나라도 있으면 완료 처리하지 않음
+    if (hasNonZeroValue) {
+      logger.info('Has non-zero value, skip completion check', {
+        keyword,
+        productCode,
+        checks: checks.filter(c => c !== null),
+        hasNonZeroValue
+      });
+      return;
+    }
+    
+    // 마지막 5개의 체크값 확인 (3에서 5로 변경)
     let consecutiveZeros = 0;
     let lastCheckNumber = 0;
     
@@ -836,7 +877,7 @@ async function checkConsecutiveZeros(keyword: string, productCode: string): Prom
         lastCheckNumber = i + 1;
         if (checks[i] === 0) {
           consecutiveZeros++;
-          if (consecutiveZeros >= 3) {
+          if (consecutiveZeros >= 5) { // 3에서 5로 변경
             // 이미 완료 처리되었고, 같은 체크 번호에서 완료되었다면 스킵
             if (row.completed_at_check && row.completed_at_check >= lastCheckNumber) {
               logger.info('Already completed at same or later check', {
@@ -848,7 +889,7 @@ async function checkConsecutiveZeros(keyword: string, productCode: string): Prom
               return;
             }
             
-            // 연속 3번 0이면 완료 처리
+            // 연속 5번 0이고 0이 아닌 값이 없으면 완료 처리
             const updateQuery = `
               UPDATE v3_keyword_ranking_checks
               SET is_completed = TRUE,
@@ -861,7 +902,7 @@ async function checkConsecutiveZeros(keyword: string, productCode: string): Prom
             
             await pool.query(updateQuery, [lastCheckNumber, keyword, productCode]);
             
-            logger.info('Keyword marked as completed due to 3 consecutive zeros', {
+            logger.info('Keyword marked as completed due to 5 consecutive zeros with no non-zero values', {
               keyword,
               productCode,
               lastCheckNumber,

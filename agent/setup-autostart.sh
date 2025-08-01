@@ -117,34 +117,34 @@ main() {
     
     case $choice in
         1)
-            create_desktop_entry "chrome" "+0+0"
-            create_desktop_entry "firefox" "+650+0"
-            create_desktop_entry "webkit" "+325+400"
+            create_desktop_entry "chrome" "+920+0"
+            create_desktop_entry "firefox" "+920+360"
+            create_desktop_entry "webkit" "+920+720"
             ;;
         2)
-            create_desktop_entry "chrome" "+0+0"
+            create_desktop_entry "chrome" "+920+0"
             ;;
         3)
-            create_desktop_entry "firefox" "+0+0"
+            create_desktop_entry "firefox" "+920+0"
             ;;
         4)
-            create_desktop_entry "webkit" "+0+0"
+            create_desktop_entry "webkit" "+920+0"
             ;;
         5)
             echo ""
             read -p "Chrome 설정하시겠습니까? [y/N]: " chrome_choice
             if [[ $chrome_choice =~ ^[Yy]$ ]]; then
-                create_desktop_entry "chrome" "+0+0"
+                create_desktop_entry "chrome" "+920+0"
             fi
             
             read -p "Firefox 설정하시겠습니까? [y/N]: " firefox_choice
             if [[ $firefox_choice =~ ^[Yy]$ ]]; then
-                create_desktop_entry "firefox" "+650+0"
+                create_desktop_entry "firefox" "+920+360"
             fi
             
             read -p "WebKit 설정하시겠습니까? [y/N]: " webkit_choice
             if [[ $webkit_choice =~ ^[Yy]$ ]]; then
-                create_desktop_entry "webkit" "+325+400"
+                create_desktop_entry "webkit" "+920+720"
             fi
             ;;
         *)

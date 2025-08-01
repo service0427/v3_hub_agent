@@ -139,7 +139,8 @@ npm install
 
 # Playwright 브라우저 설치
 echo -e "${BLUE}🌐 브라우저 설치 중...${NC}"
-npx playwright install chromium firefox webkit
+# Chrome, Firefox, WebKit 설치 (chrome은 chromium의 alias)
+npx playwright install chrome firefox webkit
 
 # WebKit 시스템 의존성 자동 설치
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then

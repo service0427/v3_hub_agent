@@ -67,7 +67,15 @@ async function launchBrowser(browserType = 'chrome', customOptions = {}) {
   };
   
   console.log(`🌐 ${browserConfig.name} 브라우저 실행 중...`);
-  console.log(`📁 브라우저 채널: ${options.channel || 'chromium'}`);
+  
+  // 브라우저별 적절한 정보 표시
+  if (browserType === 'chrome' && options.channel) {
+    console.log(`📁 브라우저 채널: ${options.channel}`);
+  } else if (browserType === 'webkit') {
+    console.log(`📁 브라우저 엔진: WebKit`);
+  } else if (browserType === 'firefox') {
+    console.log(`📁 브라우저 엔진: Gecko`);
+  }
   
   return await browserConfig.launcher.launch(options);
 }

@@ -455,8 +455,8 @@ while true; do
     is_failed=false
     is_blocked=false
     
-    # 차단 감지 (네트워크 에러 포함) - 우선순위 최상위
-    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|net::ERR_|NS_ERROR_NET_INTERRUPT|BLOCKED|blocked|차단|Timeout.*exceeded|waitForSelector.*Timeout|chrome-error://|Network/page error|Page error detected|browserType\.launch:|Target.*closed|Navigation failed|Error page detected|Execution context was destroyed)"; then
+    # 차단 감지 (실제 네트워크 차단만) - 우선순위 최상위
+    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|ERR_CONNECTION_CLOSED|NS_ERROR_NET_INTERRUPT|HTTP/2 Error: INTERNAL_ERROR|net::ERR_FAILED|403 Forbidden|BLOCKED|blocked|차단|Bot Detection|Security Challenge|chrome-error://|Error page detected)"; then
         is_blocked=true
         total_blocked=$((total_blocked + 1))
         # 차단 원인 표시
@@ -464,6 +464,8 @@ while true; do
             block_reason="🔒 ERR_HTTP2_PROTOCOL_ERROR (HTTPS 차단)"
         elif echo "$output" | grep -q "NS_ERROR_NET_INTERRUPT"; then
             block_reason="🔒 NS_ERROR_NET_INTERRUPT (Firefox 네트워크 차단)"
+        elif echo "$output" | grep -q "HTTP/2 Error: INTERNAL_ERROR"; then
+            block_reason="🔒 HTTP/2 Error: INTERNAL_ERROR (WebKit 네트워크 차단)"
         elif echo "$output" | grep -q "Security Challenge"; then
             block_reason="🛡️ Coupang Security Challenge"
         elif echo "$output" | grep -q "Bot Detection"; then
@@ -487,6 +489,16 @@ while true; do
         else
             block_reason="🚨 Unknown Block"
         fi
+    # 타임아웃 감지 (차단이 아님)
+    elif echo "$output" | grep -q -E "(Timeout.*exceeded|waitForSelector.*Timeout|waitForFunction.*Timeout)"; then
+        total_failed=$((total_failed + 1))
+        echo ""
+        echo -e "${YELLOW}⏱️ Timeout occurred - retrying immediately${NC}"
+        current_interval=$SUCCESS_INTERVAL  # 5초만 대기
+        no_keyword_count=0
+        fail_count=0
+        block_count=0
+        
     # 키워드 없음 감지
     elif echo "$output" | grep -q "No keywords to check"; then
         total_no_keywords=$((total_no_keywords + 1))

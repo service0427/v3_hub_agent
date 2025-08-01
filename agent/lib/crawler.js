@@ -250,19 +250,30 @@ async function searchKeyword(page, keyword, productCode) {
           await page.waitForLoadState('domcontentloaded');
           
           // URL 변경 확인
-          await page.waitForFunction(
-            targetPage => {
-              const urlParams = new URLSearchParams(window.location.search);
-              return urlParams.get('page') === String(targetPage);
-            },
-            currentPage,
-            { timeout: 10000 }
-          );
+          try {
+            await page.waitForFunction(
+              targetPage => {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('page') === String(targetPage);
+              },
+              currentPage,
+              { timeout: 20000 }  // WebKit을 위해 20초로 증가
+            );
+          } catch (timeoutError) {
+            // 페이지 전환 타임아웃 에러를 명시적으로 throw
+            const error = new Error(`Page navigation timeout: Failed to navigate to page ${currentPage}`);
+            error.name = 'PAGE_NAVIGATION_TIMEOUT';
+            throw error;
+          }
           
           await page.waitForTimeout(1500);
           
         } catch (e) {
-          // 클릭 실패 시 로그만 남기고 종료
+          // 페이지 네비게이션 타임아웃은 상위로 전파
+          if (e.name === 'PAGE_NAVIGATION_TIMEOUT') {
+            throw e;
+          }
+          // 다른 클릭 실패는 로그만 남기고 종료
           logger.error(`페이지 ${currentPage} 클릭 실패: ${e.message}`);
           break;  // 더 이상 진행하지 않음
         }

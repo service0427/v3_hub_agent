@@ -92,12 +92,7 @@ elif [[ "$UPDATE_METHOD" == "2" ]]; then
     # 완전 재설치 방식
     echo -e "${BLUE}🗑️  기존 설치 백업 중...${NC}"
     
-    # .env 파일 백업 (있는 경우)
-    if [ -f "$INSTALL_DIR/agent/.env" ]; then
-        mkdir -p "$BACKUP_DIR"
-        cp "$INSTALL_DIR/agent/.env" "$BACKUP_DIR/.env"
-        echo -e "${GREEN}✅ .env 파일 백업 완료${NC}"
-    fi
+    # .env 파일은 더 이상 사용하지 않음
     
     # logs 백업 (있는 경우)
     if [ -d "$INSTALL_DIR/agent/logs" ]; then
@@ -115,11 +110,7 @@ elif [[ "$UPDATE_METHOD" == "2" ]]; then
     echo -e "${BLUE}📥 새로 설치 중...${NC}"
     curl -sSL https://raw.githubusercontent.com/service0427/v3_hub_agent/main/agent/install.sh | bash
     
-    # 백업 복원
-    if [ -f "$BACKUP_DIR/.env" ]; then
-        cp "$BACKUP_DIR/.env" "$INSTALL_DIR/agent/.env"
-        echo -e "${GREEN}✅ .env 파일 복원 완료${NC}"
-    fi
+    # .env 파일은 더 이상 사용하지 않음 (DB에서 모든 설정 관리)
     
 else
     echo -e "${RED}❌ 잘못된 선택입니다.${NC}"

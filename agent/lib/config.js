@@ -8,7 +8,7 @@ const { Pool } = require('pg');
 const { getUniqueAgentId } = require('./system-info');
 
 // 초기 에이전트 ID (나중에 시스템 정보로 업데이트)
-let initialAgentId = process.env.AGENT_ID || `agent-${Date.now()}`;
+let initialAgentId = `agent-${Date.now()}`;
 
 // Configuration (기본값, DB에서 덮어씀)
 const config = {
