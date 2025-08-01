@@ -14,7 +14,6 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         echo -e "${YELLOW}   다음 명령어로 설치하세요:${NC}"
         echo -e "${YELLOW}   sudo npx playwright install-deps webkit${NC}"
         echo ""
-        echo -e "${RED}WebKit이 제대로 작동하지 않을 수 있습니다.${NC}"
         echo "계속하시겠습니까? (y/N)"
         read -n 1 -r
         echo

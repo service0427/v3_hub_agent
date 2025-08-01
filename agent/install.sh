@@ -139,7 +139,25 @@ npm install
 
 # Playwright 브라우저 설치
 echo -e "${BLUE}🌐 브라우저 설치 중...${NC}"
-npx playwright install chromium firefox
+npx playwright install chromium firefox webkit
+
+# WebKit 시스템 의존성 설치 (선택사항)
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    echo ""
+    echo -e "${YELLOW}📦 WebKit을 사용하려면 시스템 의존성이 필요합니다.${NC}"
+    echo -e "${YELLOW}   sudo 권한이 필요합니다. 설치하시겠습니까? (y/N)${NC}"
+    read -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}🔧 WebKit 시스템 의존성 설치 중...${NC}"
+        sudo npx playwright install-deps webkit || {
+            echo -e "${YELLOW}⚠️  의존성 설치 실패. WebKit이 제대로 작동하지 않을 수 있습니다.${NC}"
+        }
+    else
+        echo -e "${YELLOW}ℹ️  WebKit 의존성을 나중에 설치하려면:${NC}"
+        echo -e "${YELLOW}   sudo npx playwright install-deps webkit${NC}"
+    fi
+fi
 
 # .env 파일은 선택사항 - 있으면 사용, 없으면 DB 설정 사용
 if [ -f .env.example ] && [ ! -f .env ]; then
@@ -180,6 +198,10 @@ case "$1" in
         echo "🚀 V3 Agent 시작 (Firefox)..."
         ./run-firefox.sh
         ;;
+    webkit)
+        echo "🚀 V3 Agent 시작 (WebKit)..."
+        ./run-webkit.sh
+        ;;
     check)
         echo "🔍 단일 체크 실행..."
         node check.js ${@:2}
@@ -217,6 +239,7 @@ case "$1" in
         echo "  start, run   연속 실행 모드 시작 (Chrome)"
         echo "  chrome       Chrome 브라우저로 실행"
         echo "  firefox      Firefox 브라우저로 실행"
+        echo "  webkit       WebKit 브라우저로 실행"
         echo "  check [n]    n개 키워드 체크 (기본값: 1)"
         echo "  status       실행 상태 확인"
         echo "  logs         실시간 로그 확인"
@@ -257,8 +280,10 @@ echo ""
 echo -e "${BLUE}실행 방법:${NC}"
 echo "  v3-agent chrome   # Chrome 브라우저로 실행"
 echo "  v3-agent firefox  # Firefox 브라우저로 실행"
+echo "  v3-agent webkit   # WebKit 브라우저로 실행"
 echo "  v3-agent check    # 단일 체크"
 echo "  v3-agent status   # 상태 확인"
+echo "  v3-agent update   # 최신 버전으로 업데이트"
 echo ""
 echo -e "${YELLOW}⚠️  새 터미널을 열거나 아래 명령을 복사해서 실행하세요:${NC}"
 echo ""
@@ -270,3 +295,4 @@ echo -e "${YELLOW}또는 직접 실행:${NC}"
 echo "  cd $INSTALL_DIR/agent"
 echo "  ./run-chrome.sh   # Chrome 실행"
 echo "  ./run-firefox.sh  # Firefox 실행"
+echo "  ./run-webkit.sh   # WebKit 실행"
