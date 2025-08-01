@@ -55,7 +55,10 @@ async function fetchConfigFromDB() {
     
     // 설정 적용
     if (dbConfig.hub_api_url) config.hubApiUrl = dbConfig.hub_api_url;
-    if (dbConfig.browser) config.browser = dbConfig.browser;
+    // DB에 browser 설정이 있을 때만 덮어쓰기 (환경변수 우선순위 유지)
+    if (dbConfig.browser && !process.env.BROWSER) {
+      config.browser = dbConfig.browser;
+    }
     if (dbConfig.max_pages) config.maxPages = parseInt(dbConfig.max_pages);
     // batch_size, batch_delay, log_level, api_timeout 제거됨 (사용 안함)
     // headless는 항상 false로 하드코딩됨
@@ -66,6 +69,7 @@ async function fetchConfigFromDB() {
     
     console.log('✅ Config loaded from DB');
     console.log(`📡 Hub API URL: ${config.hubApiUrl}`);
+    console.log(`🌐 Browser: ${config.browser} (env: ${process.env.BROWSER})`);
     return dbConfig;
   } catch (error) {
     console.error('❌ Failed to load config from DB:', error.message);
