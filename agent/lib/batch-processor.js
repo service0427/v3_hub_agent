@@ -12,6 +12,27 @@ async function processBatch(browser, keywords, stats) {
       
       const page = await context.newPage();
       
+      // Chrome 자동화 탐지 우회
+      await page.addInitScript(() => {
+        // navigator.webdriver 숨기기
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => undefined
+        });
+        
+        // Chrome 객체 수정
+        window.chrome = {
+          runtime: {},
+        };
+        
+        // Permission API 수정
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+      });
+      
       // 체크 정보를 try 블록 밖에서 선언
       let checkNum = 1;
       let idInfo = 'NEW';

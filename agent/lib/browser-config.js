@@ -9,7 +9,14 @@ const browserConfigs = {
     launchOptions: {
       headless: false,
       // channel: 'chrome',  // 시스템 Chrome 사용 시
-      args: ['--disable-blink-features=AutomationControlled'],
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-web-security',
+        '--disable-features=IsolateOrigins,site-per-process'
+      ],
       timeout: 60000
     }
   },
