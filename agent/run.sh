@@ -8,8 +8,10 @@
 #   ./run.sh chrome   # Chrome 명시적 지정
 #   ./run.sh firefox  # Firefox 사용
 
-# 브라우저 설정
-BROWSER="${1:-chrome}"
+# 브라우저 설정 (환경변수가 이미 설정되어 있으면 유지)
+if [ -z "$BROWSER" ]; then
+    BROWSER="${1:-chrome}"
+fi
 export BROWSER
 
 # 색상 코드 정의
