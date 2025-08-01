@@ -87,6 +87,13 @@ scripts/_archived/
 test-results/
 coverage/
 
+# Development and test folders
+dev_agent/
+proxy_test_agent/
+test_agent/
+*_test/
+*_dev/
+
 # Certificates
 *.pem
 *.key
