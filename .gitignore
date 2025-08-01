@@ -89,6 +89,7 @@ coverage/
 
 # Development and test folders
 dev_agent/
+dev_agent_*/
 proxy_test_agent/
 test_agent/
 *_test/
