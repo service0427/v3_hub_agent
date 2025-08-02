@@ -25,6 +25,7 @@ async function searchKeyword(page, keyword, productCode) {
       const pageTitle = document.title || '';
       const isErrorPage = bodyText.includes('Secure Connection Failed') || 
                          bodyText.includes('NS_ERROR_NET_INTERRUPT') ||
+                         bodyText.includes('Stream error in the HTTP/2 framing layer') ||
                          bodyText.includes('The connection to') ||
                          bodyText.includes('was interrupted') ||
                          bodyText.includes('ERR_') ||

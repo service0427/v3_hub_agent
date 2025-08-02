@@ -67,6 +67,7 @@ async function processBatch(browser, keywords, stats) {
                          errorMsg.includes('ERR_CONNECTION_CLOSED') ||
                          errorMsg.includes('NS_ERROR_NET_INTERRUPT') ||
                          errorMsg.includes('HTTP/2 Error: INTERNAL_ERROR') ||  // WebKit 차단
+                         errorMsg.includes('Stream error in the HTTP/2 framing layer') ||  // WebKit 차단
                          errorMsg.includes('net::ERR_FAILED') ||
                          errorMsg.includes('403 Forbidden') ||
                          errorMsg.includes('blocked') ||
