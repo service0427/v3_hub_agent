@@ -43,13 +43,79 @@ npm install
 cp .env.example .env
 # .env 파일에서 포트 변경 (기본: 8545)
 
-# 빌드 및 실행
-npm run build
-pm2 start dist/index.js --name parserhub-v3
+# 🚀 원클릭 배포 (권장)
+./deploy.sh
+
+# 🔄 자동 시작 설정 (재부팅 시 자동 실행)
+sudo pm2 startup systemd -u $USER --hp $HOME
+pm2 save
 
 # 또는 개발 모드
 npm run dev
 ```
+
+#### 💾 허브 서버 이전 가이드
+
+다른 서버로 허브를 이전할 때:
+
+1. **새 서버 준비**
+   ```bash
+   # Node.js 18+ 설치
+   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+   sudo apt-get install -y nodejs
+   
+   # PM2 글로벌 설치
+   sudo npm install -g pm2
+   
+   # PostgreSQL 클라이언트 설치 (DB 연결용)
+   sudo apt-get install -y postgresql-client
+   ```
+
+2. **코드 복사 및 설정**
+   ```bash
+   # 프로젝트 클론
+   git clone https://github.com/service0427/v3_hub_agent.git
+   cd v3_hub_agent/hub/
+   
+   # 의존성 설치
+   npm install
+   
+   # 환경변수 복사 (기존 서버에서)
+   scp user@old-server:/path/to/v3_hub_agent/hub/.env .env
+   
+   # 또는 수동 설정
+   cp .env.example .env
+   # .env 파일 수정: DB 정보, 포트 등
+   ```
+
+3. **배포 및 자동 시작 설정**
+   ```bash
+   # 배포
+   ./deploy.sh
+   
+   # 자동 시작 설정
+   sudo pm2 startup systemd -u $USER --hp $HOME
+   pm2 save
+   
+   # 방화벽 설정 (필요시)
+   sudo ufw allow 8545/tcp
+   ```
+
+4. **서비스 확인**
+   ```bash
+   # 서버 상태 확인
+   curl http://localhost:8545/health
+   
+   # PM2 상태 확인
+   pm2 status
+   
+   # 로그 확인
+   pm2 logs parserhub-v3
+   ```
+
+5. **도메인/DNS 변경** (필요시)
+   - 기존 u24.techb.kr → 새 서버 IP로 DNS 변경
+   - 또는 새 도메인 설정
 
 ### 2. 에이전트 설치 (Linux/Windows)
 
