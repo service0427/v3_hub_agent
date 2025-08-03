@@ -456,7 +456,7 @@ while true; do
     is_blocked=false
     
     # 차단 감지 (실제 네트워크 차단만) - 우선순위 최상위
-    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|ERR_CONNECTION_CLOSED|NS_ERROR_NET_INTERRUPT|HTTP/2 Error: INTERNAL_ERROR|net::ERR_FAILED|403 Forbidden|BLOCKED|blocked|차단|Bot Detection|Security Challenge|chrome-error://|Error page detected)"; then
+    if echo "$output" | grep -q -E "(ERR_HTTP2_PROTOCOL_ERROR|ERR_CONNECTION_CLOSED|NS_ERROR_NET_INTERRUPT|HTTP/2 Error: INTERNAL_ERROR|net::ERR_FAILED|403 Forbidden|BLOCKED|blocked|차단|Bot Detection|Security Challenge|chrome-error://|Error page detected|WebKit search navigation failed|infinite loading suspected)"; then
         is_blocked=true
         total_blocked=$((total_blocked + 1))
         # 차단 원인 표시
@@ -486,6 +486,8 @@ while true; do
             block_reason="🌐 Error page detected (Network blocked)"
         elif echo "$output" | grep -q "Execution context was destroyed"; then
             block_reason="🔄 Page navigation detected (Context destroyed)"
+        elif echo "$output" | grep -q -E "(WebKit search navigation failed|infinite loading suspected)"; then
+            block_reason="🔄 WebKit 무한 로딩 (검색 페이지 전환 실패)"
         else
             block_reason="🚨 Unknown Block"
         fi
