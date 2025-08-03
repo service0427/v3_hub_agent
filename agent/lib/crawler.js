@@ -67,8 +67,48 @@ async function searchKeyword(page, keyword, productCode) {
         console.log(`⌨️ [${browserType.toUpperCase()}] Enter 키로 검색`);
         await page.keyboard.press('Enter');
         
-        // 검색 결과 페이지 로드 대기
-        await page.waitForTimeout(3000);
+        // 검색 결과 페이지 로드 대기 (WebKit 무한 로딩 감지)
+        if (browserType === 'webkit') {
+          console.log(`🔍 [WEBKIT] 페이지 전환 감지 중...`);
+          try {
+            // URL 변경 또는 검색 결과 요소 대기 (최대 10초)
+            await Promise.race([
+              page.waitForURL('**/np/search**', { timeout: 10000 }),
+              page.waitForSelector('#product-list', { timeout: 10000 }),
+              page.waitForSelector('[class^=no-result_magnifier]', { timeout: 10000 })
+            ]);
+            console.log(`✅ [WEBKIT] 검색 결과 페이지 로드 완료`);
+          } catch (waitError) {
+            console.log(`⚠️ [WEBKIT] 페이지 전환 실패 - 무한 로딩 의심`);
+            
+            // 현재 페이지 상태 확인
+            const pageState = await page.evaluate(() => {
+              return {
+                url: window.location.href,
+                title: document.title,
+                bodyText: document.body?.innerText?.substring(0, 100) || '',
+                readyState: document.readyState
+              };
+            });
+            
+            console.log(`📍 [WEBKIT] 현재 페이지 상태:`, {
+              url: pageState.url,
+              title: pageState.title,
+              readyState: pageState.readyState
+            });
+            
+            // 메인 페이지에 머물러 있으면 차단으로 판단
+            if (pageState.url.includes('www.coupang.com') && !pageState.url.includes('/np/search')) {
+              console.log(`🚫 [WEBKIT] 검색 페이지 전환 실패 - 차단 감지`);
+              throw new Error('BLOCKED: WebKit search navigation failed - infinite loading suspected');
+            }
+          }
+          
+          await page.waitForTimeout(2000);
+        } else {
+          // 다른 브라우저는 기존 방식
+          await page.waitForTimeout(3000);
+        }
         
       } catch (error) {
         console.error(`❌ [${browserType.toUpperCase()}] 검색 중 오류:`, error.message);

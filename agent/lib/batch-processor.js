@@ -68,6 +68,8 @@ async function processBatch(browser, keywords, stats) {
                          errorMsg.includes('NS_ERROR_NET_INTERRUPT') ||
                          errorMsg.includes('HTTP/2 Error: INTERNAL_ERROR') ||  // WebKit 차단
                          errorMsg.includes('Stream error in the HTTP/2 framing layer') ||  // WebKit 차단
+                         errorMsg.includes('WebKit search navigation failed') ||  // WebKit 무한 로딩
+                         errorMsg.includes('infinite loading suspected') ||  // WebKit 무한 로딩
                          errorMsg.includes('net::ERR_FAILED') ||
                          errorMsg.includes('403 Forbidden') ||
                          errorMsg.includes('blocked') ||
