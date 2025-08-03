@@ -4,14 +4,120 @@ const { config } = require('./config');
 // Search keyword function
 async function searchKeyword(page, keyword, productCode) {
   try {
-    const searchUrl = `https://www.coupang.com/np/search?q=${encodeURIComponent(keyword)}&channel=user&failRedirectApp=true&page=1&listSize=72`;
+    // 검색 모드 설정 (config에서 가져오거나 기본값 사용)
+    const searchMode = config.searchMode || 'url'; // 'url' 또는 'input'
+    const searchQuery = keyword;
     
-    await page.goto(searchUrl, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 40000  // 첫 페이지는 40초 타임아웃 (브라우저 초기화 고려)
-    });
+    // 브라우저 타입 가져오기
+    const browserType = config.browser || 'chrome';
     
-    await page.waitForTimeout(2000); // 페이지 안정화 대기
+    // 결과 객체 초기화
+    const result = {
+      rank: null,
+      productName: null,
+      thumbnailUrl: null,
+      rating: null,
+      reviewCount: null,
+      errorMessage: null
+    };
+    
+    if (searchMode === 'input') {
+      // 검색창 직접 입력 모드
+      console.log(`🌐 [${browserType.toUpperCase()}] 쿠팡 메인 페이지 접속 중... (검색창 입력 모드)`);
+      
+      try {
+        await page.goto('https://www.coupang.com', { 
+          waitUntil: 'domcontentloaded',
+          timeout: 60000 
+        });
+        
+        console.log(`⏳ [${browserType.toUpperCase()}] 페이지 로딩 안정화를 위해 3초 대기...`);
+        await page.waitForTimeout(3000);
+        
+        // 검색창 찾기 및 입력
+        console.log(`🔍 [${browserType.toUpperCase()}] 검색창을 찾는 중...`);
+        
+        const searchInput = await page.waitForSelector('input[name="q"]', { timeout: 10000 });
+        console.log(`✅ [${browserType.toUpperCase()}] 검색창 발견`);
+        
+        // 검색창 클릭 및 기존 텍스트 완전 삭제
+        await searchInput.click({ clickCount: 3 }); // 트리플 클릭으로 전체 선택
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Delete');
+        await page.waitForTimeout(200);
+        
+        // 추가로 clear 메서드 사용
+        await searchInput.fill('');
+        await page.waitForTimeout(200);
+        
+        // 한번 더 클릭하여 포커스 확실히
+        await searchInput.click();
+        await page.waitForTimeout(300);
+        
+        // 검색어 타이핑
+        console.log(`⌨️ [${browserType.toUpperCase()}] 검색어 입력 중: "${searchQuery}"`);
+        for (const char of searchQuery) {
+          await page.keyboard.type(char);
+          await page.waitForTimeout(10 + Math.random() * 50);
+        }
+        
+        await page.waitForTimeout(500);
+        
+        // Enter 키로 검색
+        console.log(`⌨️ [${browserType.toUpperCase()}] Enter 키로 검색`);
+        await page.keyboard.press('Enter');
+        
+        // 검색 결과 페이지 로드 대기
+        await page.waitForTimeout(3000);
+        
+      } catch (error) {
+        console.error(`❌ [${browserType.toUpperCase()}] 검색 중 오류:`, error.message);
+        
+        if (error.message.includes('ERR_HTTP2_PROTOCOL_ERROR') || 
+            error.message.includes('NS_ERROR_NET_INTERRUPT') ||
+            error.message.includes('ERR_CONNECTION_REFUSED') ||
+            error.message.includes('ERR_NETWORK_CHANGED')) {
+          console.log(`⏳ [${browserType.toUpperCase()}] 차단 오류 화면 확인을 위해 3초 대기...`);
+          await page.waitForTimeout(3000);
+          result.errorMessage = '네트워크 차단 오류';
+          throw new Error('BLOCKED: ' + error.message);
+        }
+        
+        console.log(`⏳ [${browserType.toUpperCase()}] 오류 화면 확인을 위해 3초 대기...`);
+        await page.waitForTimeout(3000);
+        result.errorMessage = '검색 실행 실패';
+        throw error;
+      }
+      
+    } else {
+      // URL 직접 이동 모드 (기존 방식)
+      const searchUrl = `https://www.coupang.com/np/search?q=${encodeURIComponent(searchQuery)}&channel=user&failRedirectApp=true&page=1&listSize=72`;
+      console.log(`🌐 [${browserType.toUpperCase()}] 쿠팡 검색 페이지 접속 중... (URL 직접 이동)`);
+      
+      try {
+        await page.goto(searchUrl, { 
+          waitUntil: 'domcontentloaded',
+          timeout: 40000  // 첫 페이지는 40초 타임아웃 (브라우저 초기화 고려)
+        });
+        
+        console.log(`⏳ [${browserType.toUpperCase()}] 페이지 로딩 안정화를 위해 2초 대기...`);
+        await page.waitForTimeout(2000);
+      } catch (gotoError) {
+        console.error(`❌ [${browserType.toUpperCase()}] 페이지 접속 실패:`, gotoError.message);
+        
+        if (gotoError.message.includes('ERR_HTTP2_PROTOCOL_ERROR') || 
+            gotoError.message.includes('NS_ERROR_NET_INTERRUPT') ||
+            gotoError.message.includes('ERR_CONNECTION_REFUSED') ||
+            gotoError.message.includes('ERR_NETWORK_CHANGED')) {
+          console.log(`⏳ [${browserType.toUpperCase()}] 차단 오류 화면 확인을 위해 3초 대기...`);
+          await page.waitForTimeout(3000);
+          result.errorMessage = '네트워크 차단 오류';
+          throw new Error('BLOCKED: ' + gotoError.message);
+        }
+        
+        console.log(`🔄 [${browserType.toUpperCase()}] 현재 페이지에서 계속 진행 시도...`);
+      }
+    }
     
     // Check for error page
     const quickCheck = await page.evaluate(() => {
