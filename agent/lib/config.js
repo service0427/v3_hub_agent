@@ -23,7 +23,8 @@ const config = {
   agentIP: null,
   screenName: null,
   agentName: null,
-  browserCloseDelay: 1000  // 기본값 1초
+  browserCloseDelay: 1000,  // 기본값 1초
+  searchMode: process.env.SEARCH_MODE || 'url'  // 검색 모드: 'url' 또는 'input'
 };
 
 // PostgreSQL pool for config
@@ -69,12 +70,20 @@ async function fetchConfigFromDB() {
     // headless는 항상 false로 하드코딩됨
     if (dbConfig.browser_close_delay) config.browserCloseDelay = parseInt(dbConfig.browser_close_delay);
     
+    // 검색 모드 설정: 환경변수가 최우선, 그 다음 DB, 마지막으로 기본값
+    if (process.env.SEARCH_MODE) {
+      config.searchMode = process.env.SEARCH_MODE;
+    } else if (dbConfig.search_mode) {
+      config.searchMode = dbConfig.search_mode;
+    }
+    
     configCache = dbConfig;
     configFetchCount = 0;
     
     console.log('✅ Config loaded from DB');
     console.log(`📡 Hub API URL: ${config.hubApiUrl}`);
     console.log(`🌐 Browser: ${config.browser} (env: ${process.env.BROWSER}, DB: ${dbConfig.browser || 'not set'})`);
+    console.log(`🔍 Search Mode: ${config.searchMode} (env: ${process.env.SEARCH_MODE || 'not set'}, DB: ${dbConfig.search_mode || 'not set'})`);
     console.log(`🔄 Config refresh count reset to 0`);
     return dbConfig;
   } catch (error) {
