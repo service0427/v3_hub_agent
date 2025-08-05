@@ -32,7 +32,7 @@ async function searchKeyword(page, keyword, productCode) {
         });
         
         console.log(`⏳ [${browserType.toUpperCase()}] 페이지 로딩 안정화를 위해 3초 대기...`);
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(300000);
         
         // 검색창 찾기 및 입력
         console.log(`🔍 [${browserType.toUpperCase()}] 검색창을 찾는 중...`);
@@ -136,7 +136,7 @@ async function searchKeyword(page, keyword, productCode) {
       
       try {
         await page.goto(searchUrl, { 
-          waitUntil: 'domcontentloaded',
+          waitUntil: 'load',
           timeout: 40000  // 첫 페이지는 40초 타임아웃 (브라우저 초기화 고려)
         });
         
@@ -394,7 +394,7 @@ async function searchKeyword(page, keyword, productCode) {
           });
           
           // 페이지 로딩 대기
-          await page.waitForLoadState('domcontentloaded');
+          await page.waitForLoadState('load');
           
           // URL 변경 확인
           try {
